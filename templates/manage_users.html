@@ -1,0 +1,146 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>User Management — SupportHub</title>
+<style>
+  :root{ --bg:#f6f7fb; --card:#ffffff; --line:#e7e7ee; --muted:#6B7280; }
+  *{ box-sizing:border-box }
+  body{ margin:0; background:var(--bg); font-family:system-ui, Segoe UI, Arial }
+  .container{ max-width:1100px; margin:28px auto; padding:0 24px }
+  .top{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px }
+  h1{ margin:0; font-size:24px }
+  .btn, a.btn{ display:inline-flex; gap:8px; align-items:center; padding:8px 14px; border-radius:10px; border:1px solid var(--line); background:#fff; text-decoration:none; color:#111; cursor:pointer }
+  .btn.primary{ background:#2563eb; color:#fff; border-color:#1f5fe6 }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:14px }
+  label{ font-size:12px; color:#374151; display:block; margin-bottom:6px }
+  input, select{ width:100%; padding:9px; border:1px solid #d7d9e0; border-radius:10px }
+  .grid{ display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:10px }
+
+  table{ width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; table-layout:fixed }
+  colgroup col.col-user{ width: 220px }
+  colgroup col.col-role{ width: 160px }
+  colgroup col.col-pass{ width: 240px }
+  colgroup col.col-created{ width: 220px }
+  colgroup col.col-action{ width: 220px }
+  th, td{ padding:10px; border-bottom:1px solid var(--line); vertical-align:middle; text-align:left; }
+  thead th{ background:#f0f2ff; font-weight:600 }
+  td .muted{ color:#6b7280 }
+  td .actions{ display:flex; gap:8px; flex-wrap:wrap }
+  .note{ font-size:12px; color:#6b7280; margin-top:6px }
+</style>
+
+{% if request.query_params.get('pw_updated') == '1' or pw_updated %}
+<div id="pw-updated-flag" hidden>1</div>
+{% endif %}
+
+<div class="container">
+  <div class="top">
+    <h1>User Management</h1>
+    <div>
+      <a class="btn" href="/">Back</a>
+      <a class="btn" href="/logout">Logout</a>
+    </div>
+  </div>
+
+  <!-- Create User -->
+  <div class="card">
+    <form class="grid" action="/admin/users/create" method="post">
+      <div>
+        <label>Username</label>
+        <input name="username" required>
+      </div>
+      <div>
+        <label>Password</label>
+        <input name="password" required>
+      </div>
+      <div>
+        <label>Role</label>
+        <select name="role" required>
+          <option>Operator</option>
+          <option>Engineer</option>
+          <option>Technician</option>
+          <option>Admin</option>
+        </select>
+      </div>
+      <div style="display:flex; align-items:flex-end">
+        <button class="btn primary" type="submit">Create</button>
+      </div>
+    </form>
+    <div class="note">หมายเหตุ: ระบบไม่แสดงรหัสผ่านเดิมของผู้ใช้ (เก็บแบบแฮช). หากต้องการเปลี่ยน ให้กรอกรหัสใหม่ในแถวของผู้ใช้นั้นแล้วกด Save</div>
+  </div>
+
+  <!-- Users table -->
+  <table>
+    <colgroup>
+      <col class="col-user">
+      <col class="col-role">
+      <col class="col-pass">
+      <col class="col-created">
+      <col class="col-action">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Role</th>
+        <th>Set New Password</th>
+        <th>Created</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for u in users %}
+      <tr>
+        <td>
+          <div style="font-weight:600; color:#111">{{ u.username }}</div>
+        </td>
+
+        <td>
+          <form action="/admin/users/update/{{u.id}}" method="post" id="form-update-{{u.id}}">
+            <select name="role" {% if u.username|upper == 'ADMIN' and me.username|upper != 'ADMIN' %}disabled{% endif %}>
+              {% for r in ["Operator","Engineer","Technician","Admin"] %}
+                <option {% if u.role==r %}selected{% endif %}>{{r}}</option>
+              {% endfor %}
+            </select>
+        </td>
+
+        <td>
+            <input name="new_password" type="password" placeholder="เว้นว่างหากไม่เปลี่ยน" {% if u.username|upper == 'ADMIN' and me.username|upper != 'ADMIN' %}disabled{% endif %}>
+        </td>
+
+        <td>
+          <!-- ใช้เวลาไทย + รูปแบบ วัน-เดือน-ปี -->
+          <div class="muted">{{ fmt_th(u.created_at) }}</div>
+        </td>
+
+        <td>
+          <div class="actions">
+            <button class="btn primary" type="submit" {% if u.username|upper == 'ADMIN' and me.username|upper != 'ADMIN' %}disabled{% endif %}>Save</button>
+          </form>
+            <form action="/admin/users/delete/{{u.id}}" method="post" onsubmit="return confirm('ลบผู้ใช้นี้?');" style="display:inline">
+              <button class="btn" type="submit" {% if u.username|upper == 'ADMIN' %}disabled{% endif %}>Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+(function(){
+  function showAndClean(){
+    try{
+      alert("ตั้งรหัสผ่านใหม่สำเร็จแล้ว");
+      const params = new URLSearchParams(location.search);
+      params.delete('pw_updated');
+      const url = location.pathname + (params.toString() ? ('?' + params.toString()) : '');
+      history.replaceState({}, '', url);
+      const flag = document.getElementById('pw-updated-flag');
+      if (flag) flag.remove();
+    }catch(e){}
+  }
+  const hasFlag = !!document.getElementById('pw-updated-flag');
+  const fromURL = new URLSearchParams(location.search).get('pw_updated') === '1';
+  if (hasFlag || fromURL) window.addEventListener('load', () => setTimeout(showAndClean, 50));
+})();
+</script>

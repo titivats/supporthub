@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <title>ME SupportHub — Active Tickets</title>
+  <style>
+    :root{
+      --bg:#f6f7fb; --card:#ffffff; --line:#e7e7ee; --muted:#6B7280;
+      --thead:#f0f2ff;
+      --w-id:40px; --w-action:140px; --w-time:100px; --w-request:100px;
+      --w-line:70px; --w-machine:160px; --w-machinetype:150px; --w-problem:190px; --w-desc:250px; --w-status:290px;
+      --pill-h:30px; --pill-w:70px;
+      --filter-width: 320px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);font-family:system-ui,Segoe UI,Arial}
+    .container{max-width:1560px;margin:28px auto;padding:0 12px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+    h1{margin:0;font-size:28px;letter-spacing:.2px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap}
+    a.btn, button.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:#fff;text-decoration:none;color:#111;cursor:pointer}
+    a.btn:hover,button.btn:hover{box-shadow:0 2px 10px rgba(0,0,0,.06)}
+    .actions .btn{font-size:14px}
+    .btn.sm{display:inline-flex;align-items:center;justify-content:center;height:var(--pill-h); width:var(--pill-w);padding:0 12px;border-radius:999px;font-size:12px; line-height:1;border:1px solid var(--line)}
+    .btn.warn{background:#FEF9C3;border-color:#FDE68A}
+    .btn.neutral{background:#F3F4F6;border-color:#E5E7EB}
+    .btn.danger{background:#FEE2E2;border-color:#FECACA}
+    .btn.good{background:#DCFCE7;border-color:#BBF7D0}
+    .btn:disabled{opacity:.5; cursor:not-allowed; box-shadow:none !important}
+    .grid{display:grid;grid-template-columns:320px 1fr;gap:18px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+    .card .head{padding:12px 16px;border-bottom:1px solid var(--line);background:var(--thead);font-weight:600}
+    .card .body{padding:16px}
+    label{font-size:12px;color:#374151;display:block;margin-bottom:6px}
+    input[type=text], select, textarea{width:100%;padding:10px;border:1px solid #d7d9e0;border-radius:10px;background:#fff;font:inherit}
+    select:disabled{background:#f3f4f6;color:#9ca3af}
+    textarea{height:110px;resize:vertical}
+    .submit{width:100%; background:#2563eb;color:#fff;border:none;border-radius:12px;padding:12px;cursor:pointer}
+    .muted{color:#6b7280}
+
+    .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:calc(100vh - 220px)}
+    table{border-collapse:collapse;min-width:calc(var(--w-id)+var(--w-action)+var(--w-time)+var(--w-request)+var(--w-line)+var(--w-machine)+var(--w-machinetype)+var(--w-problem)+var(--w-desc)+var(--w-status));width:max-content}
+    thead th, tbody td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
+    thead th{position:sticky;top:0;z-index:1;background:var(--thead);color:#374151;font-weight:700}
+    .row-actions{display:flex;flex-direction:column;gap:8px}
+    .row-actions-row{display:flex;gap:8px}
+    .badge{display:inline-flex;align-items:center;justify-content:center;height:var(--pill-h); width:var(--pill-w);padding:0 12px;border-radius:999px;border:1px solid var(--line);background:#f9fafb;font-weight:400;font-size:12px;line-height:1}
+    .st-pending{background:#EFF6FF;border-color:#BFDBFE;color:#1D4ED8}
+    .st-doing{background:#FEF9C3;border-color:#FDE68A;color:#92400E}
+    .st-hold{background:#F3F4F6;border-color:#E5E7EB;color:#374151}
+    .st-done{background:#DCFCE7;border-color:#BBF7D0;color:#065F46}
+    .st-cancel{background:#FEE2E2;border-color:#FECACA;color:#991B1B}
+    .time-date{font-weight:400}
+    .time-clock{color:#374151;font-weight:400}
+    .timer-line{display:flex;align-items:center;gap:6px;margin-top:4px}
+    .clock{width:14px;height:14px;vertical-align:-2px}
+    .td-desc{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+    .id-btn{ background:none;border:none;padding:0;margin:0;font:inherit;color:#2563eb;cursor:pointer }
+    .id-btn:hover{ text-decoration:underline }
+
+    .head-grid{display:grid;grid-template-columns: 1fr auto;align-items:center}
+    .head-right{display:flex;align-items:center;gap:10px}
+    .head-select{width:var(--filter-width);max-width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;font:inherit}
+  
+    .table-wrap table tbody tr{cursor:pointer;transition:background-color .15s ease}
+    .table-wrap table tbody tr:hover{background:#f3f6ff}
+    .table-wrap table tbody tr.row-selected{background:#e0f2fe !important; box-shadow: inset 0 0 0 2px #bae6fd}
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="topbar">
+    <h1>ME SupportHub — Active Tickets</h1>
+    <div class="actions">
+      {% if user.username|upper == 'ADMIN' %}
+        <a class="btn" href="/admin/users">Manage Users</a>
+      {% endif %}
+      <a class="btn" href="/history">View History</a>
+      <button class="btn" type="button" onclick="goBack()">Back</button>
+      <a class="btn" href="/logout">Logout</a>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Create Request -->
+    <div class="card">
+      <div class="head">Create Request</div>
+      <div class="body">
+        <form method="post" action="/request/create" id="reqForm">
+          <div style="margin-bottom:12px">
+            <label>Requested by</label>
+            <input type="text" value="{{ user.username }}" disabled>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label>Line No.</label>
+              <select name="machine" id="lineSelect" required>
+                <option value="">-- Select Line --</option>
+                {% for lo in line_ops %}<option value="{{ lo }}">{{ lo }}</option>{% endfor %}
+                <option value="PACKING">PACKING</option>
+                <option value="REWORK">REWORK</option>
+                <option value="CLEANING">CLEANING</option>
+              </select>
+            </div>
+
+            <div>
+              <label>Machine</label>
+              <select name="equipment_type" id="machineTypeSelect" required>
+                <option value="">-- Select Machine --</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-bottom:12px">
+            <label>Machine Type</label>
+            <select name="equipment" id="equipmentSelect" disabled>
+              <option value="">-- Select Machine Type --</option>
+              {% for eq in equipments %}<option value="{{ eq }}">{{ eq }}</option>{% endfor %}
+            </select>
+          </div>
+
+          <div id="problemWrap" style="margin-bottom:12px; display:none">
+            <label>Problem</label>
+            <select name="problem" id="problemSelect"></select>
+          </div>
+
+          <div style="margin-bottom:12px">
+            <label>Description of Issue</label>
+            <textarea name="description" placeholder="ระบุรายละเอียดเพิ่มเติม..."></textarea>
+          </div>
+
+          <button class="submit" type="submit">Submit Request</button>
+          <div class="muted" style="margin-top:8px">Logged in as {{ user.username }} ({{ user.role }})</div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Active Tickets -->
+    <div class="card">
+      <div class="head">
+        <div class="head-grid">
+          <div>Active Tickets</div>
+          <div class="head-right">
+            <span>Select Support Area</span>
+            <select id="groupFilter" class="head-select" aria-label="Select Support Area">
+              <option value="">-- Select --</option>
+              <option value="Backline">Backline</option>
+              <option value="Inspection">Inspection</option>
+              <option value="Coating & Robotic">Coating & Robotic</option>
+              <option value="Rework">Rework</option>
+              <option value="Etc..">Etc..</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="body">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:var(--w-id)">ID</th>
+                <th style="width:var(--w-action)">Action</th>
+                <th style="width:var(--w-time)">Time</th>
+                <th style="width:var(--w-request)">Request by</th>
+                <th style="width:var(--w-line)">Line No.</th>
+                <th style="width:var(--w-machine)">Machine</th>
+                <th style="width:var(--w-machinetype)">Machine Type</th>
+                <th style="width:var(--w-problem)">Problem</th>
+                <th style="width:var(--w-desc)">Description</th>
+                <th style="width:var(--w-status)">Status / Timer</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              {% for t in tickets %}
+              {% set th = fmt_th(t.created_at) %}
+              {% set th_date = th.split(' ')[0] %}
+              {% set th_time = th.split(' ')[1] %}
+              {% set st = (t.status or 'PENDING').upper() %}
+              {% set st_class = 'st-pending' if st=='PENDING' else ('st-doing' if st=='DOING' else ('st-hold' if st=='HOLD' else ('st-done' if st=='DONE' else 'st-cancel'))) %}
+              <tr id="row-{{ t.id }}"
+                  data-id="{{ t.id }}"
+                  data-status="{{ st }}"
+                  data-created-utc="{{ t.created_at.isoformat() }}Z"
+                  data-doing-start-utc="{{ (t.doing_started_at.isoformat() + 'Z') if t.doing_started_at else '' }}"
+                  data-hold-start-utc="{{ (t.hold_started_at.isoformat() + 'Z') if t.hold_started_at else '' }}"
+                  data-hold-reason="{{ (t.hold_reason or '') | e }}"
+                  data-current-actor="{{ (t.current_actor or '') | e }}"
+                  data-done-by="{{ (t.done_by or '') | e }}"
+                  data-canceled-by="{{ (t.canceled_by or '') | e }}">
+                <td><button class="id-btn" type="button" data-id="{{ t.id }}" onclick="selectRow(this.dataset.id)">{{ t.id }}</button></td>
+                <td>
+                  <div class="row-actions">
+                    <div class="row-actions-row">
+                      <button type="button" class="btn sm warn" data-id="{{ t.id }}" data-action="doing" onclick="return doActionFromDataset(this)">Doing</button>
+                      <button type="button" class="btn sm neutral" data-id="{{ t.id }}" data-action="hold"  onclick="return doActionFromDataset(this)">Hold</button>
+                    </div>
+                    <div class="row-actions-row">
+                      <button type="button" class="btn sm danger" data-id="{{ t.id }}" data-action="cancel" onclick="return doActionFromDataset(this)">Cancel</button>
+                      <button type="button" class="btn sm good"   data-id="{{ t.id }}" data-action="done"   onclick="return doActionFromDataset(this)">Done</button>
+                    </div>
+                  </div>
+                </td>
+                <td><div class="time-date">{{ th_date }}</div><div class="time-clock">{{ th_time }}</div></td>
+                <td>{{ t.requester }}</td>
+                <td>{{ t.machine }}</td>
+
+                <!-- Machine (ประเภท) -->
+                <td data-col="machine"><span class="js-type"></span></td>
+
+                <!-- Machine Type (รุ่น/ยี่ห้อ) -->
+                <td class="js-eq" data-raw="{{ t.equipment or '' }}">{{ t.equipment or "-" }}</td>
+
+                <td>{{ t.problem or "-" }}</td>
+                <td class="td-desc" title="{{ t.description or '' }}">{{ t.description or "-" }}</td>
+                <td>
+                  <span class="badge {{ st_class }}" id="status-{{ t.id }}">{{ st }}</span>
+                  <div class="timer-line" id="timer-{{ t.id }}">
+                    <svg class="clock" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <circle cx="12" cy="12" r="9" stroke-width="2"></circle>
+                      <path d="M12 7v6l4 2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                    <span>Pending 00:00:00</span>
+                  </div>
+                  <div class="muted" id="note-{{ t.id }}"></div>
+                  <div class="muted" id="who-{{ t.id }}"></div>
+                </td>
+              </tr>
+              {% endfor %}
+              {% if tickets|length == 0 %}
+              <tr><td colspan="10" class="muted" style="padding:18px">No active tickets</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="problem-data" type="application/json">{{ problem_map | tojson }}</script>
+<script>
+  /* ========= Master data ========= */
+  const machineTypeMap = {
+    "Wave Soldering": ["ECO1 SELECT", "ERSA VERSAFLOW"],
+    /* Inspection */
+    "AOI Wave": ["Jet", "Nordson", "Axxon", "Yamaha"],
+    "AOI Coating": ["Jet", "Nordson", "Axxon", "Yamaha"],
+    "X-ray": ["Vitrox", "Omron"],
+    /* Coating & Robotic */
+    "RTV": ["Mycronic", "Nordson"],
+    "Coating": ["Mycronic", "Nordson"],
+    "UV Curing": ["Nutek", "Nordson"],
+    "Robotic": ["Robot KUKA"],
+    /* Backline */
+    "Auto Insertion": ["FACC"],
+    "Router": ["Aurotek Router", "Cencorp Router"],
+    "Cleaning Machine": ["DCT Twin", "KED D1000", "KED AT5000"],
+    /* Rework */
+    "Rework Machine": ["SRT Machine", "Minipot", "Oven"],
+    /* Etc.. */
+    "Etc..": ["Other M/C or Tools"]
+  };
+
+  const EXTRA = {
+    AOI_XRAY_COMMON: [
+      "NPI Program","Server Down","Network Can't Connect","History Not Record","Preventive Maintenance",
+    ],
+  };
+
+  const PROBLEM_PRESETS = {
+    byType: {
+      "AOI Wave": [...EXTRA.AOI_XRAY_COMMON],
+      "AOI Coating": [...EXTRA.AOI_XRAY_COMMON],
+      "X-ray": [...EXTRA.AOI_XRAY_COMMON],
+      "Cleaning Machine": ["Fill Chemical","Machine Down","System Leak"],
+      "UV Curing": ["Convert Program","Machine Down","Board Can't Transfer","PCB Burn","UV Lamp Damage"],
+      "Robotic": ["Machine Down","NPI","Convert Program","Robot Error","Board Drop","Vacuum Error","Can't Pick UP Board"],
+    },
+    byEquipment: {
+      "Robot KUKA": ["Machine Down","NPI","Convert Program","Robot Error","Board Drop","Vacuum Error","Can't Pick UP Board"],
+      /* Rework */
+      "SRT Machine": ["NPI Program","Machine Down","Preventive Maintenance","Run Profiles","Machine Error"],
+      "Minipot": ["Machine Down","Preventive Maintenance","Fill Solder","Temperature Out Range","Solder Clog inside"],
+      "Oven": ["Machine Down","Preventive Maintenance","Temperature Out range"],
+    }
+  };
+
+  const DEFAULT_PROBLEMS_ALL_MACHINES = ["NPI Program","Preventive Maintenance","Set-Up Machine"];
+  const removedMachines = new Set(["KED Cleaning Pallet","KED Cleaning PCB","DCT Cleaning PCB"]);
+
+  const typeSel = document.getElementById('machineTypeSelect');
+  const eqSel   = document.getElementById('equipmentSelect');
+  const probWrap= document.getElementById('problemWrap');
+  const probSel = document.getElementById('problemSelect');
+
+  let problemMap = {};
+  try{ problemMap = JSON.parse(document.getElementById('problem-data').textContent || "{}"); }catch(_){ problemMap = {}; }
+
+  const unique = arr => [...new Set((arr||[]).filter(Boolean))];
+  function mergePresets(){
+    Object.keys(PROBLEM_PRESETS.byType||{}).forEach(type=>{
+      const merged = unique([...(problemMap[type]||[]), ...PROBLEM_PRESETS.byType[type], ...DEFAULT_PROBLEMS_ALL_MACHINES]);
+      if(merged.length) problemMap[type] = merged;
+    });
+    Object.keys(PROBLEM_PRESETS.byEquipment||{}).forEach(eq=>{
+      const merged = unique([...(problemMap[eq]||[]), ...PROBLEM_PRESETS.byEquipment[eq], ...DEFAULT_PROBLEMS_ALL_MACHINES]);
+      if(merged.length) problemMap[eq] = merged;
+    });
+  }
+  mergePresets();
+
+  const lowerKeyProblems = (()=>{ const out={}; Object.keys(problemMap||{}).forEach(k=>{ out[(k||'').toLowerCase()] = (problemMap[k]||[]).slice(); }); return out; })();
+
+  /* ====== Build selects ====== */
+  function buildMachineTypesAll(){
+    const types = Object.keys(machineTypeMap);
+    typeSel.innerHTML = '<option value="">-- Select Machine --</option>';
+    types.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; typeSel.appendChild(o); });
+    typeSel.value = '';
+    rebuildEquipmentOptionsForType('');
+    rebuildProblemOptions([]);
+    probWrap.style.display='none'; probSel.required=false;
+    eqSel.disabled = true;
+  }
+  buildMachineTypesAll();
+
+  function rebuildEquipmentOptionsForType(type){
+    const brands = (machineTypeMap[type]||[]).filter(n=>!removedMachines.has(n));
+    eqSel.innerHTML = '<option value="">-- Select Machine Type --</option>';
+    brands.forEach(brand=>{
+      const o=document.createElement('option');
+      o.value = `${type}||${brand}`;
+      o.textContent = brand;
+      o.appendChild(document.createTextNode(''));
+      eqSel.appendChild(o);
+    });
+    eqSel.disabled = brands.length===0;
+    eqSel.value = '';
+
+    if(type === 'Etc..'){
+      rebuildProblemOptions([]);
+      probWrap.style.display='none';
+      probSel.required = false;
+      return;
+    }
+
+    const problems = getProblemsForType(type);
+    if(problems.length){
+      rebuildProblemOptions(problems);
+      probWrap.style.display='block';
+      probSel.required = true;
+    }else{
+      rebuildProblemOptions([]);
+      probWrap.style.display='none';
+      probSel.required = false;
+    }
+  }
+
+  function rebuildProblemOptions(list){
+    probSel.innerHTML = '<option value="">-- Select Problem --</option>';
+    unique(list).forEach(p=>{ const o=document.createElement('option'); o.value=p; o.textContent=p; probSel.appendChild(o); });
+  }
+
+  function getProblemsForEquipment(brand){
+    if(!brand) return [];
+    const direct = problemMap[brand];
+    if(direct && direct.length) return direct.slice();
+    const lower = lowerKeyProblems[(brand||'').toLowerCase()] || [];
+    if(lower.length) return lower.slice();
+    const key = (brand||'').toLowerCase();
+    for(const k in lowerKeyProblems){
+      if(k.includes(key) || key.includes(k)){
+        const arr = lowerKeyProblems[k]||[]; if(arr.length) return arr.slice();
+      }
+    }
+    return [];
+  }
+
+  function getProblemsForType(type){
+    const eqs = machineTypeMap[type] || [];
+    let all = (problemMap[type]||[]).slice();
+    eqs.forEach(eq=>{ all = all.concat(getProblemsForEquipment(eq)); });
+    return unique(all);
+  }
+
+  function onEquipmentChange(){
+    const type = typeSel.value || '';
+    const raw  = eqSel.value || '';
+    const brand = raw.includes('||') ? raw.split('||')[1] : raw;
+
+    if(brand && brand.toLowerCase() === 'other m/c or tools'){
+      rebuildProblemOptions(['Other']);
+      probWrap.style.display='block';
+      probSel.required = true;
+      return;
+    }
+
+    const eqProblems = getProblemsForEquipment(brand);
+    const problems   = eqProblems.length ? eqProblems : getProblemsForType(type);
+    if(problems.length){
+      rebuildProblemOptions(problems);
+      probWrap.style.display='block';
+      probSel.required = true;
+    }else{
+      rebuildProblemOptions([]);
+      probWrap.style.display='none';
+      probSel.required = false;
+    }
+  }
+
+  if(typeSel){ typeSel.addEventListener('change', e=>{ rebuildEquipmentOptionsForType(e.target.value); }); }
+  if(eqSel){ eqSel.addEventListener('change', onEquipmentChange); }
+  eqSel.disabled = true;
+
+  /* ====== เติมค่าในตารางให้ตรง 100% ====== */
+  const PREFERRED_MAP = {
+    "jet":"AOI Wave", "nordson":"AOI Wave", "axxon":"AOI Wave", "yamaha":"AOI Wave",
+    "mycronic":"RTV", "nutek":"UV Curing", "robot kuka":"Robotic",
+    "srt machine":"Rework Machine", "minipot":"Rework Machine", "oven":"Rework Machine",
+    "other m/c or tools":"Etc.."
+  };
+
+  function fillMachineAndBrand(){
+    document.querySelectorAll('#tbody tr').forEach(tr=>{
+      const typeSpan = tr.querySelector('.js-type');
+      const eqCell   = tr.querySelector('.js-eq');
+      if(!typeSpan || !eqCell) return;
+
+      const raw = (eqCell.getAttribute('data-raw') || '').trim();
+      if(raw.includes('||')){
+        const [type, brand] = raw.split('||');
+        typeSpan.textContent = type || '-';
+        eqCell.textContent = brand || '-';
+        return;
+      }
+      const brandLower = raw.toLowerCase();
+      typeSpan.textContent = PREFERRED_MAP[brandLower] || detectTypeFromBrand(raw) || '-';
+    });
+  }
+
+  function detectTypeFromBrand(brand){
+    for(const [type, brands] of Object.entries(machineTypeMap)){
+      if((brands||[]).map(b=>b.toLowerCase()).includes((brand||'').toLowerCase())){
+        return type;
+      }
+    }
+    return '';
+  }
+
+  // ===== Persist Group Filter in localStorage =====
+  const GF_KEY = 'supporthub_group_filter';
+  function restoreGroupFilter(){
+    const el = document.getElementById('groupFilter');
+    if(!el) return;
+    const saved = localStorage.getItem(GF_KEY);
+    if(saved !== null){
+      let exists = false;
+      for(const opt of el.options){ if(opt.value === saved){ exists = true; break; } }
+      if(exists){ el.value = saved; }
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', ()=> {
+    fillMachineAndBrand();
+    restoreGroupFilter();      // << กู้ค่าที่เคยเลือกไว้
+    applyGroupFilter();        // << แล้วจึงใช้ฟิลเตอร์
+    applyActionGuards();
+  });
+
+  /* ====== Actions / Status timer ====== */
+  const CURRENT_USER = "{{ user.username }}";
+
+  function doActionFromDataset(btn){ return doAction(btn.dataset.id, btn.dataset.action); }
+
+  function isBlockedByGuards(tr, action){
+    const st  = (tr?.dataset.status || "PENDING").toUpperCase();
+    const act = (tr?.dataset.currentActor || "").trim();
+
+    if((st==="DOING" || st==="HOLD") && act && act !== CURRENT_USER){
+      return { blocked: true, message: `งานนี้กำลังถูกดำเนินการโดย ${act} อยู่ คุณไม่มีสิทธิ์เปลี่ยนสถานะตอนนี้` };
+    }
+    if((action==="doing" && st==="DOING") || (action==="hold" && st==="HOLD")){
+      return { blocked: true, message: `ไม่สามารถกด ${st==="DOING"?"Doing":"Hold"} ซ้ำเพื่อเริ่มนับเวลาใหม่ได้` };
+    }
+    return { blocked: false };
+  }
+
+  async function doAction(id, action){
+    const tr = document.getElementById('row-'+id);
+    const guard = isBlockedByGuards(tr, action);
+    if(guard.blocked){ alert(guard.message); return false; }
+
+    const pwd = prompt("กรอกรหัสผ่านผู้ปฏิบัติงาน:"); if(pwd === null) return false;
+    let reason = "", solution = "";
+    if(action === "hold"){ reason = prompt("เหตุผล Hold:"); if(!reason?.trim()) return false; }
+    if(action === "done"){ solution = prompt("Solution:"); if(!solution?.trim()) return false; }
+    if(action === "cancel"){ reason = prompt("เหตุผล Cancel:"); if(!reason?.trim()) return false; }
+
+    const fd = new FormData();
+    fd.append("action", action); fd.append("password", pwd);
+    if(reason) fd.append("reason", reason); if(solution) fd.append("solution", solution);
+
+    try{
+      const res = await fetch(`/tickets/${id}/action`, { method:"POST", body: fd });
+      if(!res.ok){ const t = await res.text(); alert("ไม่สำเร็จ: " + t); return false; }
+      location.reload();
+    }catch(e){ alert("เกิดข้อผิดพลาด: " + e); }
+    return false;
+  }
+
+  /* ---------- Timer helpers ---------- */
+  const PAGE_LOAD_TS = Math.floor(Date.now()/1000);
+
+  const hms = sec => {
+    sec = Math.max(0, sec|0);
+    const h = sec/3600|0, m=(sec%3600)/60|0, s=sec%60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  };
+
+  const isoToTS = s => { if(!s) return 0; const t = Date.parse(s); return isNaN(t) ? 0 : (t/1000|0); };
+
+  function safeElapsedFrom(ts){
+    if(!ts) return 0;
+    const now = Math.floor(Date.now()/1000);
+    const origin = Math.min(ts, PAGE_LOAD_TS);
+    return Math.max(0, now - origin);
+  }
+
+  function selectRow(id){
+    document.querySelectorAll('#tbody tr.row-selected').forEach(tr=>tr.classList.remove('row-selected'));
+    const tr=document.getElementById('row-'+id);
+    if(tr){ tr.classList.add('row-selected'); }
+  }
+
+  function tick(){
+    document.querySelectorAll('tr[id^="row-"]').forEach(tr=>{
+      const id = tr.dataset.id;
+      const st = (tr.dataset.status || "PENDING").toUpperCase();
+      const created = isoToTS(tr.dataset.createdUtc || "");
+      const doingSt = isoToTS(tr.dataset.doingStartUtc || "");
+      const holdSt  = isoToTS(tr.dataset.holdStartUtc || "");
+      const reason    = tr.dataset.holdReason || "";
+      const whoDoing  = tr.dataset.currentActor || "";
+      const whoHold   = tr.dataset.currentActor || "";
+      const whoDone   = tr.dataset.doneBy || "";
+      const whoCancel = tr.dataset.canceledBy || "";
+      const statusEl = document.getElementById(`status-${id}`);
+      const timerSpan= document.getElementById(`timer-${id}`).querySelector('span');
+      const noteEl   = document.getElementById(`note-${id}`);
+      const whoEl    = document.getElementById(`who-${id}`);
+
+      let label = st, seconds = 0, timerLabel = "", note = "", whoText = "";
+
+      if(st==="PENDING"){
+        label="PENDING";
+        seconds = created ? safeElapsedFrom(created) : 0;
+        timerLabel="Pending";
+        statusEl.className="badge st-pending";
+        whoText="";
+      } else if(st==="DOING"){
+        label="DOING";
+        seconds = doingSt ? safeElapsedFrom(doingSt) : 0;
+        timerLabel="Doing";
+        statusEl.className="badge st-doing";
+        whoText = whoDoing ? ("User: "+whoDoing) : "";
+      } else if(st==="HOLD"){
+        label="HOLD";
+        seconds = holdSt ? safeElapsedFrom(holdSt) : 0;
+        timerLabel="Hold";
+        statusEl.className="badge st-hold";
+        note = reason?("Reason: "+reason):"";
+        whoText = whoHold ? ("User: "+whoHold) : "";
+      } else if(st==="DONE"){
+        label="DONE";
+        timerLabel="Done";
+        statusEl.className="badge st-done";
+        whoText = whoDone ? ("User: "+whoDone) : "";
+      } else if(st==="CANCELLED"){
+        label="CANCELLED";
+        timerLabel="Canceled";
+        statusEl.className="badge st-cancel";
+        whoText = whoCancel ? ("User: "+whoCancel) : "";
+      }
+
+      statusEl.textContent = label;
+      timerSpan.textContent = `${timerLabel} ${hms(seconds)}`;
+      noteEl.textContent = note;
+      whoEl.textContent = whoText;
+    });
+
+    applyActionGuards();
+  }
+  tick(); setInterval(tick, 1000);
+
+  // ==== Guard: ปิด/เปิดปุ่มตามกติกา ====
+  function setDisabled(btn, disabled, titleText){
+    if(!btn) return;
+    btn.disabled = !!disabled;
+    btn.title = disabled ? (titleText || btn.title || "") : "";
+  }
+
+  function applyActionGuards(){
+    document.querySelectorAll('#tbody tr').forEach(tr=>{
+      const st  = (tr.dataset.status || "PENDING").toUpperCase();
+      const act = (tr.dataset.currentActor || "").trim();
+
+      const btnDoing  = tr.querySelector('button.btn.sm[data-action="doing"]');
+      const btnHold   = tr.querySelector('button.btn.sm[data-action="hold"]');
+      const btnCancel = tr.querySelector('button.btn.sm[data-action="cancel"]');
+      const btnDone   = tr.querySelector('button.btn.sm[data-action="done"]');
+
+      setDisabled(btnDoing,  false);
+      setDisabled(btnHold,   false);
+      setDisabled(btnCancel, false);
+      setDisabled(btnDone,   false);
+
+      if(st==="DOING" || st==="HOLD"){
+        if(act && act !== CURRENT_USER){
+          const msg = `งานนี้กำลังถูกดำเนินการโดย ${act} อยู่`;
+          setDisabled(btnDoing,  true, msg);
+          setDisabled(btnHold,   true, msg);
+          setDisabled(btnCancel, true, msg);
+          setDisabled(btnDone,   true, msg);
+        }else{
+          if(st==="DOING"){ setDisabled(btnDoing, true, "กำลัง Doing อยู่แล้ว"); }
+          if(st==="HOLD"){  setDisabled(btnHold,  true, "กำลัง Hold อยู่แล้ว"); }
+        }
+      }
+    });
+  }
+
+  /* ====== Filter (Select Support Area) ====== */
+  const GROUPS = {
+    "Backline": ["Wave Soldering","Auto Insertion","Router","Cleaning Machine"],
+    "Back Line": ["Wave Soldering","Auto Insertion","Router","Cleaning Machine"],
+    "Inspection": ["AOI Wave","AOI Coating","X-ray"],
+    "Coating & Robotic": ["RTV","Coating","UV Curing","Robotic"],
+    "Rework": ["Rework Machine"],
+    "Etc..": ["Etc.."]
+  };
+
+  function norm(s){ return (s||"").trim().replace(/\s+/g," ").toLowerCase(); }
+
+  function getMachineColIndex(tbl){
+    const heads = Array.from(tbl.querySelectorAll("thead th")).map(th => (th.textContent||"").trim());
+    let idx = heads.findIndex(h => h === "Machine");
+    if(idx === -1){ idx = heads.findIndex(h => /machine/i.test(h) && !/type/i.test(h)); }
+    return idx;
+  }
+  function getMachineTypeColIndex(tbl){
+    const heads = Array.from(tbl.querySelectorAll("thead th")).map(th => (th.textContent||"").trim());
+    return heads.findIndex(h => /machine type/i.test(h));
+  }
+
+  function allowedMachinesFor(val){ return GROUPS[val] || []; }
+
+  function applyGroupFilter(){
+    const sel = document.getElementById("groupFilter");
+    const val = sel ? sel.value : "";
+    const tbl = document.querySelector(".table-wrap table");
+    if(!tbl) return;
+
+    const mIdx = getMachineColIndex(tbl);
+    const mtIdx = getMachineTypeColIndex(tbl);
+    if(mIdx < 0) return;
+
+    if(!val){
+      tbl.querySelectorAll("tbody tr").forEach(tr=> tr.style.display = "");
+      return;
+    }
+
+    const allowMachines = new Set(allowedMachinesFor(val).map(norm));
+    const allowReworkTypes = new Set(["SRT Machine","Minipot","Oven"].map(norm));
+
+    tbl.querySelectorAll("tbody tr").forEach(tr=>{
+      const tds = tr.querySelectorAll("td");
+      const machineName = tds[mIdx] ? norm(tds[mIdx].textContent) : "";
+      if(val === "Rework"){
+        const mtName = (mtIdx>=0 && tds[mtIdx]) ? norm(tds[mtIdx].textContent) : "";
+        tr.style.display = (allowMachines.has(machineName) && allowReworkTypes.has(mtName)) ? "" : "none";
+      }else{
+        tr.style.display = allowMachines.has(machineName) ? "" : "none";
+      }
+    });
+  }
+
+  // บันทึกค่าเมื่อผู้ใช้เปลี่ยน และใช้ฟิลเตอร์ทันที
+  document.addEventListener("change", e=>{
+    if(e.target && e.target.id === "groupFilter"){
+      localStorage.setItem(GF_KEY, e.target.value || "");
+      applyGroupFilter();
+    }
+  });
+</script>
+
+<script>
+// === History-like row click select (single-select) ===
+(function(){
+  var tbody = document.getElementById('tbody') 
+           || document.querySelector('.table-wrap table tbody') 
+           || document.querySelector('table tbody');
+  if(!tbody) return;
+  var selectedTr = null;
+  tbody.addEventListener('click', function(e){
+    var tr = e.target.closest('tr');
+    if(!tr || !tbody.contains(tr)) return;
+    if(selectedTr && selectedTr !== tr) selectedTr.classList.remove('row-selected');
+    tr.classList.toggle('row-selected');
+    selectedTr = tr.classList.contains('row-selected') ? tr : null;
+  });
+})();
+
+// Back button helper
+function goBack(){
+  if (window.history.length > 1) {
+    window.history.back();
+  } else {
+    window.location.href = "/";
+  }
+}
+</script>
+
+<!-- Smart-reload: เช็คเวอร์ชันทุก 2 วินาที แล้วรีโหลดเมื่อมีการเปลี่ยนแปลง -->
+<script>
+(function(){
+  let lastV = null;
+  async function poll(){
+    try{
+      const res = await fetch('/api/active/version', { cache: 'no-store' });
+      const j = await res.json();
+      if(lastV === null){
+        lastV = j.version;
+      }else if(j.version !== lastV){
+        location.reload();
+        return;
+      }
+    }catch(e){ /* ignore */ }
+    setTimeout(poll, 2000);
+  }
+  window.addEventListener('load', poll);
+})();
+</script>
+
+</body>
+</html>
