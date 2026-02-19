@@ -8,7 +8,7 @@
       --bg:#f6f7fb; --card:#ffffff; --line:#e7e7ee; --muted:#6B7280;
       --thead:#f0f2ff;
       --w-id:40px; --w-action:140px; --w-time:100px; --w-request:100px;
-      --w-line:70px; --w-machine:160px; --w-machinetype:150px; --w-problem:190px; --w-desc:250px; --w-status:290px;
+      --w-line:70px; --w-machine:160px; --w-machinetype:150px; --w-machineid:120px; --w-problem:190px; --w-desc:250px; --w-status:290px;
       --pill-h:30px; --pill-w:70px;
       --filter-width: 320px;
     }
@@ -39,7 +39,7 @@
     .muted{color:#6b7280}
 
     .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:calc(100vh - 220px)}
-    table{border-collapse:collapse;min-width:calc(var(--w-id)+var(--w-action)+var(--w-time)+var(--w-request)+var(--w-line)+var(--w-machine)+var(--w-machinetype)+var(--w-problem)+var(--w-desc)+var(--w-status));width:max-content}
+    table{border-collapse:collapse;min-width:calc(var(--w-id)+var(--w-action)+var(--w-time)+var(--w-request)+var(--w-line)+var(--w-machine)+var(--w-machinetype)+var(--w-machineid)+var(--w-problem)+var(--w-desc)+var(--w-status));width:max-content}
     thead th, tbody td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
     thead th{position:sticky;top:0;z-index:1;background:var(--thead);color:#374151;font-weight:700}
     .row-actions{display:flex;flex-direction:column;gap:8px}
@@ -82,7 +82,8 @@
   <div class="topbar">
     <h1>ME SupportHub — Active Tickets</h1>
     <div class="actions">
-      {% if user.username|upper == 'ADMIN' %}
+      {% if user.username|upper == 'ADMIN' or user.role|lower == 'admin' %}
+        <a class="btn" href="/admin/machines">Add Machine</a>
         <a class="btn" href="/admin/users">Manage Users</a>
       {% endif %}
       <a class="btn" href="/history">View History</a>
@@ -108,9 +109,6 @@
               <select name="machine" id="lineSelect" required>
                 <option value="">-- Select Line --</option>
                 {% for lo in line_ops %}<option value="{{ lo }}">{{ lo }}</option>{% endfor %}
-                <option value="PACKING">PACKING</option>
-                <option value="REWORK">REWORK</option>
-                <option value="CLEANING">CLEANING</option>
               </select>
             </div>
 
@@ -128,6 +126,11 @@
               <option value="">-- Select Machine Type --</option>
               {% for eq in equipments %}<option value="{{ eq }}">{{ eq }}</option>{% endfor %}
             </select>
+          </div>
+
+          <div id="machineIdWrap" style="margin-bottom:12px; display:none">
+            <label>Machine ID</label>
+            <select name="machine_id" id="machineIdSelect"></select>
           </div>
 
           <div id="problemWrap" style="margin-bottom:12px; display:none">
@@ -155,11 +158,9 @@
             <span>Select Support Area</span>
             <select id="groupFilter" class="head-select" aria-label="Select Support Area">
               <option value="">-- Select --</option>
-              <option value="Backline">Backline</option>
-              <option value="Inspection">Inspection</option>
-              <option value="Coating & Robotic">Coating & Robotic</option>
-              <option value="Rework">Rework</option>
-              <option value="Etc..">Etc..</option>
+              {% for area in support_areas %}
+                <option value="{{ area }}">{{ area }}</option>
+              {% endfor %}
             </select>
           </div>
         </div>
@@ -177,6 +178,7 @@
                 <th style="width:var(--w-line)">Line No.</th>
                 <th style="width:var(--w-machine)">Machine</th>
                 <th style="width:var(--w-machinetype)">Machine Type</th>
+                <th style="width:var(--w-machineid)">Machine ID</th>
                 <th style="width:var(--w-problem)">Problem</th>
                 <th style="width:var(--w-desc)">Description</th>
                 <th style="width:var(--w-status)">Status / Timer</th>
@@ -221,7 +223,7 @@
 
                 <!-- Machine Type (รุ่น/ยี่ห้อ) -->
                 <td class="js-eq" data-raw="{{ t.equipment or '' }}">{{ t.equipment or "-" }}</td>
-
+                <td>{{ t.machine_id or "-" }}</td>
                 <td>{{ t.problem or "-" }}</td>
                 <td class="td-desc" title="{{ t.description or '' }}">{{ t.description or "-" }}</td>
                 <td>
@@ -239,7 +241,7 @@
               </tr>
               {% endfor %}
               {% if tickets|length == 0 %}
-              <tr><td colspan="10" class="muted" style="padding:18px">No active tickets</td></tr>
+              <tr><td colspan="11" class="muted" style="padding:18px">No active tickets</td></tr>
               {% endif %}
             </tbody>
           </table>
@@ -288,28 +290,14 @@
 </div>
 
 <script id="problem-data" type="application/json">{{ problem_map | tojson }}</script>
+<script id="problem-combo-data" type="application/json">{{ problem_combo_map | tojson }}</script>
+<script id="machine-type-data" type="application/json">{{ machine_type_map | tojson }}</script>
+<script id="machine-id-data" type="application/json">{{ machine_id_map | tojson }}</script>
+<script id="support-area-map-data" type="application/json">{{ support_area_map | tojson }}</script>
 <script>
   /* ========= Master data ========= */
-  const machineTypeMap = {
-    "Wave Soldering": ["ECO1 SELECT", "ERSA VERSAFLOW"],
-    /* Inspection */
-    "AOI Wave": ["Jet", "Nordson", "Axxon", "Yamaha"],
-    "AOI Coating": ["Jet", "Nordson", "Axxon", "Yamaha"],
-    "X-ray": ["Vitrox", "Omron"],
-    /* Coating & Robotic */
-    "RTV": ["Mycronic", "Nordson"],
-    "Coating": ["Mycronic", "Nordson"],
-    "UV Curing": ["Nutek", "Nordson"],
-    "Robotic": ["Robot KUKA"],
-    /* Backline */
-    "Auto Insertion": ["FACC"],
-    "Router": ["Aurotek Router", "Cencorp Router"],
-    "Cleaning Machine": ["DCT Twin", "KED D1000", "KED AT5000"],
-    /* Rework */
-    "Rework Machine": ["SRT Machine", "Minipot", "Oven"],
-    /* Etc.. */
-    "Etc..": ["Other M/C or Tools"]
-  };
+  let machineTypeMap = {};
+  try{ machineTypeMap = JSON.parse(document.getElementById('machine-type-data').textContent || "{}"); }catch(_){ machineTypeMap = {}; }
 
   const EXTRA = {
     AOI_XRAY_COMMON: [
@@ -338,8 +326,11 @@
   const DEFAULT_PROBLEMS_ALL_MACHINES = ["NPI Program","Preventive Maintenance","Set-Up Machine"];
   const removedMachines = new Set(["KED Cleaning Pallet","KED Cleaning PCB","DCT Cleaning PCB"]);
 
+  const lineSel = document.getElementById('lineSelect');
   const typeSel = document.getElementById('machineTypeSelect');
   const eqSel   = document.getElementById('equipmentSelect');
+  const machineIdWrap = document.getElementById('machineIdWrap');
+  const machineIdSel  = document.getElementById('machineIdSelect');
   const probWrap= document.getElementById('problemWrap');
   const probSel = document.getElementById('problemSelect');
 
@@ -354,15 +345,35 @@
       if(sel.validity.valueMissing){ sel.setCustomValidity(REQUIRED_MSG); }
     });
   }
-  attachSelectRequiredMessage(document.getElementById('lineSelect'));
+  attachSelectRequiredMessage(lineSel);
   attachSelectRequiredMessage(typeSel);
   attachSelectRequiredMessage(eqSel);
+  attachSelectRequiredMessage(machineIdSel);
   attachSelectRequiredMessage(probSel);
 
   let problemMap = {};
   try{ problemMap = JSON.parse(document.getElementById('problem-data').textContent || "{}"); }catch(_){ problemMap = {}; }
 
   const unique = arr => [...new Set((arr||[]).filter(Boolean))];
+  const norm = s => (s||"").trim().replace(/\s+/g," ").toLowerCase();
+
+  let supportAreaMap = {};
+  try{ supportAreaMap = JSON.parse(document.getElementById('support-area-map-data').textContent || "{}"); }catch(_){ supportAreaMap = {}; }
+
+  const LEGACY_SUPPORT_AREA_MAP = {
+    "Backline": ["Wave Soldering","Auto Insertion","Router","Cleaning Machine"],
+    "Inspection": ["AOI Wave","AOI Coating","X-ray"],
+    "Coating & Robotic": ["RTV","Coating","UV Curing","Robotic"],
+    "Rework": ["Rework Machine"],
+    "Etc..": ["Etc.."]
+  };
+  const supportAreaMapByNorm = (() => {
+    const src = Object.keys(supportAreaMap || {}).length ? supportAreaMap : LEGACY_SUPPORT_AREA_MAP;
+    const out = {};
+    Object.keys(src).forEach(area => { out[norm(area)] = unique(src[area] || []); });
+    return out;
+  })();
+
   function mergePresets(){
     Object.keys(PROBLEM_PRESETS.byType||{}).forEach(type=>{
       const merged = unique([...(problemMap[type]||[]), ...PROBLEM_PRESETS.byType[type], ...DEFAULT_PROBLEMS_ALL_MACHINES]);
@@ -376,16 +387,61 @@
   mergePresets();
 
   const lowerKeyProblems = (()=>{ const out={}; Object.keys(problemMap||{}).forEach(k=>{ out[(k||'').toLowerCase()] = (problemMap[k]||[]).slice(); }); return out; })();
+  let problemComboMap = {};
+  try{ problemComboMap = JSON.parse(document.getElementById('problem-combo-data').textContent || "{}"); }catch(_){ problemComboMap = {}; }
+  const lowerKeyComboProblems = (()=>{ const out={}; Object.keys(problemComboMap||{}).forEach(k=>{ out[(k||'').toLowerCase()] = (problemComboMap[k]||[]).slice(); }); return out; })();
+  let machineIdMap = {};
+  try{ machineIdMap = JSON.parse(document.getElementById('machine-id-data').textContent || "{}"); }catch(_){ machineIdMap = {}; }
+  const lowerKeyMachineIds = (()=>{ const out={}; Object.keys(machineIdMap||{}).forEach(k=>{ out[(k||'').toLowerCase()] = (machineIdMap[k]||[]).slice(); }); return out; })();
 
   /* ====== Build selects ====== */
+  function hideProblemSelect(){
+    rebuildProblemOptions([]);
+    probWrap.style.display='none';
+    probSel.required = false;
+  }
+
+  function rebuildMachineIdOptions(list){
+    machineIdSel.innerHTML = '<option value="">-- Select Machine ID --</option>';
+    unique(list).forEach(mid=>{
+      const o = document.createElement('option');
+      o.value = mid;
+      o.textContent = mid;
+      machineIdSel.appendChild(o);
+    });
+  }
+
+  function hideMachineIdSelect(){
+    rebuildMachineIdOptions([]);
+    machineIdWrap.style.display='none';
+    machineIdSel.required = false;
+  }
+
+  function selectedSupportArea(){
+    const sel = document.getElementById('groupFilter');
+    return sel ? (sel.value || '') : '';
+  }
+
+  function getFilteredMachineTypes(){
+    const allTypes = Object.keys(machineTypeMap || {});
+    const area = selectedSupportArea();
+    if(!area){
+      return allTypes.sort((a,b)=>a.localeCompare(b, undefined, { sensitivity:'base', numeric:true }));
+    }
+    const allowed = new Set(allowedMachinesFor(area).map(norm));
+    return allTypes
+      .filter(t => allowed.has(norm(t)))
+      .sort((a,b)=>a.localeCompare(b, undefined, { sensitivity:'base', numeric:true }));
+  }
+
   function buildMachineTypesAll(){
-    const types = Object.keys(machineTypeMap);
+    const types = getFilteredMachineTypes();
     typeSel.innerHTML = '<option value="">-- Select Machine --</option>';
     types.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; typeSel.appendChild(o); });
     typeSel.value = '';
     rebuildEquipmentOptionsForType('');
-    rebuildProblemOptions([]);
-    probWrap.style.display='none'; probSel.required=false;
+    hideMachineIdSelect();
+    hideProblemSelect();
     eqSel.disabled = true;
   }
   buildMachineTypesAll();
@@ -402,24 +458,8 @@
     });
     eqSel.disabled = brands.length===0;
     eqSel.value = '';
-
-    if(type === 'Etc..'){
-      rebuildProblemOptions([]);
-      probWrap.style.display='none';
-      probSel.required = false;
-      return;
-    }
-
-    const problems = getProblemsForType(type);
-    if(problems.length){
-      rebuildProblemOptions(problems);
-      probWrap.style.display='block';
-      probSel.required = true;
-    }else{
-      rebuildProblemOptions([]);
-      probWrap.style.display='none';
-      probSel.required = false;
-    }
+    hideMachineIdSelect();
+    hideProblemSelect();
   }
 
   function rebuildProblemOptions(list){
@@ -427,26 +467,58 @@
     unique(list).forEach(p=>{ const o=document.createElement('option'); o.value=p; o.textContent=p; probSel.appendChild(o); });
   }
 
-  function getProblemsForEquipment(brand){
-    if(!brand) return [];
+  function getMachineIdsForEquipment(machine, brand){
+    if(!machine || !brand) return [];
+    const key = `${machine}||${brand}`.toLowerCase();
+    return unique(lowerKeyMachineIds[key] || []);
+  }
+
+  function getProblemsForEquipment(machine, brand){
+    if(!machine || !brand) return [];
+    const comboKey = `${machine}||${brand}`.toLowerCase();
+    const combo = lowerKeyComboProblems[comboKey] || [];
     const direct = problemMap[brand];
-    if(direct && direct.length) return direct.slice();
+    if(direct && direct.length) return unique([...combo, ...direct]);
     const lower = lowerKeyProblems[(brand||'').toLowerCase()] || [];
-    if(lower.length) return lower.slice();
+    if(lower.length) return unique([...combo, ...lower]);
     const key = (brand||'').toLowerCase();
     for(const k in lowerKeyProblems){
       if(k.includes(key) || key.includes(k)){
-        const arr = lowerKeyProblems[k]||[]; if(arr.length) return arr.slice();
+        const arr = lowerKeyProblems[k]||[]; if(arr.length) return unique([...combo, ...arr]);
       }
     }
-    return [];
+    return combo.slice();
   }
 
   function getProblemsForType(type){
     const eqs = machineTypeMap[type] || [];
     let all = (problemMap[type]||[]).slice();
-    eqs.forEach(eq=>{ all = all.concat(getProblemsForEquipment(eq)); });
+    eqs.forEach(eq=>{ all = all.concat(getProblemsForEquipment(type, eq)); });
     return unique(all);
+  }
+
+  function updateProblemBySelection(type, brand){
+    if(!type || !brand){
+      hideProblemSelect();
+      return;
+    }
+
+    if(brand.toLowerCase() === 'other m/c or tools'){
+      rebuildProblemOptions(['Other']);
+      probWrap.style.display='block';
+      probSel.required = true;
+      return;
+    }
+
+    const eqProblems = getProblemsForEquipment(type, brand);
+    const problems   = eqProblems.length ? eqProblems : getProblemsForType(type);
+    if(problems.length){
+      rebuildProblemOptions(problems);
+      probWrap.style.display='block';
+      probSel.required = true;
+    }else{
+      hideProblemSelect();
+    }
   }
 
   function onEquipmentChange(){
@@ -454,29 +526,38 @@
     const raw  = eqSel.value || '';
     const brand = raw.includes('||') ? raw.split('||')[1] : raw;
 
-    if(brand && brand.toLowerCase() === 'other m/c or tools'){
-      rebuildProblemOptions(['Other']);
-      probWrap.style.display='block';
-      probSel.required = true;
+    hideProblemSelect();
+    if(!brand){
+      hideMachineIdSelect();
       return;
     }
 
-    const eqProblems = getProblemsForEquipment(brand);
-    const problems   = eqProblems.length ? eqProblems : getProblemsForType(type);
-    if(problems.length){
-      rebuildProblemOptions(problems);
-      probWrap.style.display='block';
-      probSel.required = true;
-    }else{
-      rebuildProblemOptions([]);
-      probWrap.style.display='none';
-      probSel.required = false;
+    const machineIds = getMachineIdsForEquipment(type, brand);
+    rebuildMachineIdOptions(machineIds);
+    machineIdSel.value = '';
+    machineIdWrap.style.display='block';
+    machineIdSel.required = true;
+  }
+
+  function onMachineIdChange(){
+    if(machineIdWrap.style.display === 'none'){
+      return;
     }
+    if(!machineIdSel.value){
+      hideProblemSelect();
+      return;
+    }
+    const type = typeSel.value || '';
+    const raw  = eqSel.value || '';
+    const brand = raw.includes('||') ? raw.split('||')[1] : raw;
+    updateProblemBySelection(type, brand);
   }
 
   if(typeSel){ typeSel.addEventListener('change', e=>{ rebuildEquipmentOptionsForType(e.target.value); }); }
   if(eqSel){ eqSel.addEventListener('change', onEquipmentChange); }
+  if(machineIdSel){ machineIdSel.addEventListener('change', onMachineIdChange); }
   eqSel.disabled = true;
+  hideMachineIdSelect();
 
   /* ====== เติมค่าในตารางให้ตรง 100% ====== */
   const PREFERRED_MAP = {
@@ -528,8 +609,9 @@
 
   document.addEventListener('DOMContentLoaded', ()=> {
     fillMachineAndBrand();
-    restoreGroupFilter();      // << กู้ค่าที่เคยเลือกไว้
-    applyGroupFilter();        // << แล้วจึงใช้ฟิลเตอร์
+    restoreGroupFilter();
+    buildMachineTypesAll();
+    applyGroupFilter();
     applyActionGuards();
   });
 
@@ -792,29 +874,14 @@
   }
 
   /* ====== Filter (Select Support Area) ====== */
-  const GROUPS = {
-    "Backline": ["Wave Soldering","Auto Insertion","Router","Cleaning Machine"],
-    "Back Line": ["Wave Soldering","Auto Insertion","Router","Cleaning Machine"],
-    "Inspection": ["AOI Wave","AOI Coating","X-ray"],
-    "Coating & Robotic": ["RTV","Coating","UV Curing","Robotic"],
-    "Rework": ["Rework Machine"],
-    "Etc..": ["Etc.."]
-  };
-
-  function norm(s){ return (s||"").trim().replace(/\s+/g," ").toLowerCase(); }
-
   function getMachineColIndex(tbl){
     const heads = Array.from(tbl.querySelectorAll("thead th")).map(th => (th.textContent||"").trim());
     let idx = heads.findIndex(h => h === "Machine");
     if(idx === -1){ idx = heads.findIndex(h => /machine/i.test(h) && !/type/i.test(h)); }
     return idx;
   }
-  function getMachineTypeColIndex(tbl){
-    const heads = Array.from(tbl.querySelectorAll("thead th")).map(th => (th.textContent||"").trim());
-    return heads.findIndex(h => /machine type/i.test(h));
-  }
 
-  function allowedMachinesFor(val){ return GROUPS[val] || []; }
+  function allowedMachinesFor(val){ return supportAreaMapByNorm[norm(val)] || []; }
 
   function applyGroupFilter(){
     const sel = document.getElementById("groupFilter");
@@ -823,7 +890,6 @@
     if(!tbl) return;
 
     const mIdx = getMachineColIndex(tbl);
-    const mtIdx = getMachineTypeColIndex(tbl);
     if(mIdx < 0) return;
 
     if(!val){
@@ -832,17 +898,11 @@
     }
 
     const allowMachines = new Set(allowedMachinesFor(val).map(norm));
-    const allowReworkTypes = new Set(["SRT Machine","Minipot","Oven"].map(norm));
 
     tbl.querySelectorAll("tbody tr").forEach(tr=>{
       const tds = tr.querySelectorAll("td");
       const machineName = tds[mIdx] ? norm(tds[mIdx].textContent) : "";
-      if(val === "Rework"){
-        const mtName = (mtIdx>=0 && tds[mtIdx]) ? norm(tds[mtIdx].textContent) : "";
-        tr.style.display = (allowMachines.has(machineName) && allowReworkTypes.has(mtName)) ? "" : "none";
-      }else{
-        tr.style.display = allowMachines.has(machineName) ? "" : "none";
-      }
+      tr.style.display = allowMachines.has(machineName) ? "" : "none";
     });
   }
 
@@ -851,6 +911,7 @@
     if(e.target && e.target.id === "groupFilter"){
       localStorage.setItem(GF_KEY, e.target.value || "");
       applyGroupFilter();
+      buildMachineTypesAll();
     }
   });
 </script>
@@ -905,3 +966,4 @@ function goBack(){
 
 </body>
 </html>
+

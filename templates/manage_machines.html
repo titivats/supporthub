@@ -1,0 +1,788 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Master Data Management - SupportHub</title>
+<style>
+  :root{
+    --bg:#f6f7fb;
+    --card:#ffffff;
+    --line:#e7e7ee;
+    --muted:#6b7280;
+    --ok:#065f46;
+    --okbg:#dcfce7;
+    --warn:#92400e;
+    --warnbg:#fef3c7;
+  }
+  *{ box-sizing:border-box }
+  body{
+    margin:0;
+    background:var(--bg);
+    font-family:system-ui, Segoe UI, Arial;
+    color:#111827;
+    line-height:1.35;
+  }
+  .container{
+    max-width:1400px;
+    margin:26px auto 34px;
+    padding:0 18px;
+  }
+  .top{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:14px;
+    margin-bottom:16px;
+  }
+  h1{
+    margin:0 0 4px;
+    font-size:28px;
+    line-height:1.15;
+  }
+  .lead{
+    font-size:13px;
+    color:var(--muted);
+    max-width:720px;
+  }
+  .actions{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .btn, a.btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:8px 14px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:#fff;
+    text-decoration:none;
+    color:#111827;
+    cursor:pointer;
+    font-size:14px;
+  }
+  .btn.primary{
+    background:#2563eb;
+    color:#fff;
+    border-color:#1f5fe6;
+    min-width:130px;
+  }
+  .btn.danger{
+    background:#fee2e2;
+    border-color:#fecaca;
+    color:#991b1b;
+  }
+  .btn.sm{
+    padding:6px 10px;
+    border-radius:8px;
+    font-size:12px;
+    line-height:1;
+    min-width:auto;
+  }
+  .action-cell form{
+    margin:0;
+  }
+  .status{
+    border-radius:10px;
+    padding:10px 12px;
+    margin-bottom:16px;
+    border:1px solid transparent;
+    font-size:14px;
+  }
+  .status.ok{
+    background:var(--okbg);
+    color:var(--ok);
+    border-color:#86efac;
+  }
+  .status.warn{
+    background:var(--warnbg);
+    color:var(--warn);
+    border-color:#fcd34d;
+  }
+  .section{
+    margin-top:14px;
+  }
+  .section-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:10px;
+  }
+  .section-tools{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .section h2{
+    margin:0 0 10px;
+    font-size:19px;
+  }
+  .section-note{
+    margin:-3px 0 12px;
+    font-size:13px;
+    color:var(--muted);
+  }
+  .grid{
+    display:grid;
+    gap:12px;
+  }
+  .form-grid{
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+  .list-grid{
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+  }
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px;
+    min-width:0;
+  }
+  .card h3{
+    margin:0 0 6px;
+    font-size:17px;
+  }
+  .note{
+    font-size:12px;
+    color:var(--muted);
+    margin:0 0 10px;
+  }
+  label{
+    font-size:12px;
+    color:#374151;
+    display:block;
+    margin-bottom:6px;
+  }
+  .form-row{
+    display:grid;
+    gap:10px;
+  }
+  input, select{
+    width:100%;
+    padding:9px 10px;
+    border:1px solid #d7d9e0;
+    border-radius:10px;
+    background:#fff;
+  }
+  .action-row{
+    display:flex;
+    justify-content:flex-end;
+  }
+  .table-wrap{
+    overflow:auto;
+    border:1px solid var(--line);
+    border-radius:12px;
+    max-height:320px;
+  }
+  .table-wrap.rows-5{
+    --thead-h:39px;
+    --row-h:37px;
+    max-height:calc(var(--thead-h) + (var(--row-h) * 5));
+    overflow-y:auto;
+    overflow-x:auto;
+  }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    background:#fff;
+  }
+  th, td{
+    padding:8px 10px;
+    border-bottom:1px solid var(--line);
+    text-align:left;
+    vertical-align:top;
+    font-size:13px;
+    white-space:nowrap;
+  }
+  thead th{
+    position:sticky;
+    top:0;
+    z-index:1;
+    background:#f0f2ff;
+    font-weight:600;
+  }
+  th.sortable{
+    cursor:pointer;
+    user-select:none;
+    position:relative;
+    padding-right:22px;
+  }
+  th.sortable::after{
+    content:'';
+    position:absolute;
+    right:8px;
+    top:50%;
+    transform:translateY(-50%);
+    color:#9ca3af;
+    font-size:11px;
+  }
+  th.sortable.sorted-asc::after{
+    content:'▲';
+    color:#2563eb;
+  }
+  th.sortable.sorted-desc::after{
+    content:'▼';
+    color:#2563eb;
+  }
+  tbody tr:nth-child(even){
+    background:#fafbff;
+  }
+  .muted{
+    color:var(--muted);
+  }
+  .group-grid{
+    display:grid;
+    gap:12px;
+  }
+  .group-card{
+    padding:12px;
+  }
+  .group-head{
+    margin:0 0 10px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:9px;
+  }
+  .group-head h3{
+    margin:0 0 4px;
+    font-size:16px;
+  }
+  .group-note{
+    margin:0;
+    font-size:12px;
+    color:var(--muted);
+  }
+  .mini-grid{
+    display:grid;
+    gap:10px;
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+  }
+  .mini-card{
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px;
+    background:#fff;
+  }
+  .mini-card h4{
+    margin:0 0 5px;
+    font-size:15px;
+  }
+  .data-tabs{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:10px;
+  }
+  .tab-btn{
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:7px 12px;
+    font-size:13px;
+    background:#fff;
+    color:#374151;
+    cursor:pointer;
+  }
+  .tab-btn.active{
+    background:#1f2937;
+    color:#fff;
+    border-color:#1f2937;
+  }
+  .tab-panel{
+    display:none;
+  }
+  .tab-panel.active{
+    display:block;
+  }
+  @media (max-width: 980px){
+    .top{ flex-direction:column; align-items:stretch; }
+    .section-head{ align-items:stretch; }
+    .form-grid{ grid-template-columns:1fr; }
+    .list-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    .mini-grid{ grid-template-columns:1fr; }
+  }
+  @media (max-width: 700px){
+    .list-grid{ grid-template-columns:1fr; }
+  }
+</style>
+
+<div class="container">
+  <div class="top">
+    <div>
+      <h1>Master Data Management</h1>
+      <div class="lead">Manage dropdown values used in Active Tickets: Support Area, Line No., Machine, Machine Type, Machine ID, and Problem.</div>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/">Back</a>
+      <a class="btn" href="/logout">Logout</a>
+    </div>
+  </div>
+
+  {% if status_text %}
+    <div class="status {% if status_key.endswith('_added') or status_key.endswith('_deleted') %}ok{% else %}warn{% endif %}">{{ status_text }}</div>
+  {% endif %}
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>Add New Data</h2>
+        <div class="section-note">Forms are grouped by data type. Added values are available to all users in dropdown lists.</div>
+      </div>
+    </div>
+    <div class="group-grid">
+        <div class="card group-card">
+          <div class="group-head">
+            <h3>Core Data</h3>
+            <p class="group-note">Line, Machine, and Support Area master lists.</p>
+          </div>
+          <div class="mini-grid">
+            <div class="mini-card">
+              <h4>Add Line No.</h4>
+              <div class="note">Example: BT10, PACKING-2</div>
+              <form class="form-row" method="post" action="/admin/machines/add-line">
+                <div>
+                  <label>Line No.</label>
+                  <input name="line_no" required placeholder="Line No.">
+                </div>
+                <div class="action-row">
+                  <button class="btn primary" type="submit">Add Line</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="mini-card">
+              <h4>Add Machine</h4>
+              <div class="note">Example: Laser Marking</div>
+              <form class="form-row" method="post" action="/admin/machines/add-machine">
+                <div>
+                  <label>Machine</label>
+                  <input name="machine" required placeholder="Machine">
+                </div>
+                <div class="action-row">
+                  <button class="btn primary" type="submit">Add Machine</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="mini-card">
+              <h4>Add Support Area</h4>
+              <div class="note">Example: Backline, Inspection, Coating & Robotic, Rework or custom area.</div>
+              <form class="form-row" method="post" action="/admin/machines/add-support-area">
+                <div>
+                  <label>Support Area</label>
+                  <input name="support_area" required placeholder="Support Area">
+                </div>
+                <div class="action-row">
+                  <button class="btn primary" type="submit">Add Support Area</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="card group-card">
+          <div class="group-head">
+            <h3>Mapping & Structure</h3>
+            <p class="group-note">Support Area mapping, Machine Type, and Machine ID.</p>
+          </div>
+          <div class="mini-grid">
+            <div class="mini-card">
+              <h4>Map Support Area to Machine</h4>
+              <div class="note">When user selects Support Area in Active Tickets, only mapped Machines are shown.</div>
+              <form class="form-row" method="post" action="/admin/machines/add-support-area-machine">
+                <div>
+                  <label>Support Area</label>
+                  <select name="support_area" required>
+                    <option value="">-- Select Support Area --</option>
+                    {% for sa in support_area_options %}
+                      <option value="{{ sa }}">{{ sa }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label>Machine</label>
+                  <select name="machine" required>
+                    <option value="">-- Select Machine --</option>
+                    {% for m in machine_options %}
+                      <option value="{{ m }}">{{ m }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="action-row">
+                  <button class="btn primary" type="submit">Add Mapping</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="mini-card">
+              <h4>Add Machine Type</h4>
+              <div class="note">Machine Type is linked to selected Machine.</div>
+              <form class="form-row" method="post" action="/admin/machines/add-machine-type">
+                <div>
+                  <label>Machine</label>
+                  <select name="machine" required>
+                    <option value="">-- Select Machine --</option>
+                    {% for m in machine_options %}
+                      <option value="{{ m }}">{{ m }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label>Machine Type</label>
+                  <input name="machine_type" required placeholder="Machine Type">
+                </div>
+                <div class="action-row">
+                  <button class="btn primary" type="submit">Add Machine Type</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="mini-card">
+              <h4>Add Machine ID</h4>
+              <div class="note">Machine ID is linked to Machine + Machine Type.</div>
+              <form class="form-row" method="post" action="/admin/machines/add-machine-id">
+                <div>
+                  <label>Machine</label>
+                  <select name="machine" required>
+                    <option value="">-- Select Machine --</option>
+                    {% for m in machine_options %}
+                      <option value="{{ m }}">{{ m }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label>Machine Type</label>
+                  <input name="machine_type" required placeholder="Machine Type">
+                </div>
+                <div>
+                  <label>Machine ID</label>
+                  <input name="machine_id" required placeholder="Machine ID">
+                </div>
+                <div class="action-row">
+                  <button class="btn primary" type="submit">Add Machine ID</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="card group-card">
+          <div class="group-head">
+            <h3>Problem Setup</h3>
+            <p class="group-note">Add issue types for Machine level or specific Machine Type.</p>
+          </div>
+          <div class="mini-grid" style="grid-template-columns:1fr;">
+            <div class="mini-card">
+              <h4>Add Problem</h4>
+              <div class="note">If Machine Type is blank, problem will be available at Machine level.</div>
+              <form class="form-row" method="post" action="/admin/machines/add-problem">
+                <div>
+                  <label>Machine</label>
+                  <select name="machine" required>
+                    <option value="">-- Select Machine --</option>
+                    {% for m in machine_options %}
+                      <option value="{{ m }}">{{ m }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label>Machine Type (Optional)</label>
+                  <input name="machine_type" placeholder="Machine Type">
+                </div>
+                <div>
+                  <label>Problem</label>
+                  <input name="problem" required placeholder="Problem">
+                </div>
+                <div class="action-row">
+                  <button class="btn primary" type="submit">Add Problem</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div>
+        <h2>Existing Data</h2>
+        <div class="section-note">Current values in the system. Each table shows up to 5 rows and can scroll for more. Click column header to sort, or use Delete to remove items.</div>
+      </div>
+      <div class="section-tools">
+        <a class="btn primary" href="/admin/machines/export/excel">Export Excel</a>
+      </div>
+    </div>
+    <div class="data-tabs" id="master-data-tabs">
+      <button type="button" class="tab-btn active" data-tab-target="tab-support-area">Support Area ({{ support_area_rows|length }})</button>
+      <button type="button" class="tab-btn" data-tab-target="tab-support-map">Area Mapping ({{ support_area_map_rows|length }})</button>
+      <button type="button" class="tab-btn" data-tab-target="tab-line">Line No. ({{ line_rows|length }})</button>
+      <button type="button" class="tab-btn" data-tab-target="tab-machine">Machine ({{ machine_rows|length }})</button>
+      <button type="button" class="tab-btn" data-tab-target="tab-machine-type">Machine Type ({{ machine_type_rows|length }})</button>
+      <button type="button" class="tab-btn" data-tab-target="tab-machine-id">Machine ID ({{ machine_id_rows|length }})</button>
+      <button type="button" class="tab-btn" data-tab-target="tab-problem">Problem ({{ problem_rows|length }})</button>
+    </div>
+
+    <div id="tab-support-area" class="tab-panel active">
+      <div class="card">
+        <h3>Support Area List</h3>
+        <div class="table-wrap rows-5">
+          <table class="sortable-table">
+            <thead><tr><th data-type="text">Support Area</th><th data-type="date">Created</th><th data-type="text">Action</th></tr></thead>
+            <tbody>
+              {% for r in support_area_rows %}
+                <tr>
+                  <td data-sort="{{ (r.support_area or '')|lower }}">{{ r.support_area }}</td>
+                  <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
+                  <td class="action-cell" data-sort="delete">
+                    <form method="post" action="/admin/machines/delete-support-area" onsubmit="return confirm('Delete this Support Area and all linked mappings?');">
+                      <input type="hidden" name="support_area_id" value="{{ r.id }}">
+                      <button class="btn danger sm" type="submit">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+              {% if support_area_rows|length == 0 %}<tr class="no-data"><td colspan="3" class="muted">No support areas</td></tr>{% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-support-map" class="tab-panel">
+      <div class="card">
+        <h3>Support Area Mapping List</h3>
+        <div class="table-wrap rows-5">
+          <table class="sortable-table">
+            <thead><tr><th data-type="text">Support Area</th><th data-type="text">Machine</th><th data-type="date">Created</th><th data-type="text">Action</th></tr></thead>
+            <tbody>
+              {% for r in support_area_map_rows %}
+                <tr>
+                  <td data-sort="{{ (r.support_area or '')|lower }}">{{ r.support_area }}</td>
+                  <td data-sort="{{ (r.machine or '')|lower }}">{{ r.machine }}</td>
+                  <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
+                  <td class="action-cell" data-sort="delete">
+                    <form method="post" action="/admin/machines/delete-support-area-machine" onsubmit="return confirm('Delete this mapping?');">
+                      <input type="hidden" name="map_id" value="{{ r.id }}">
+                      <button class="btn danger sm" type="submit">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+              {% if support_area_map_rows|length == 0 %}<tr class="no-data"><td colspan="4" class="muted">No support area mappings</td></tr>{% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-line" class="tab-panel">
+      <div class="card">
+        <h3>Line No. List</h3>
+        <div class="table-wrap rows-5">
+          <table class="sortable-table">
+            <thead><tr><th data-type="text">Line No.</th><th data-type="date">Created</th><th data-type="text">Action</th></tr></thead>
+            <tbody>
+              {% for r in line_rows %}
+                <tr>
+                  <td data-sort="{{ (r.line_no or '')|lower }}">{{ r.line_no }}</td>
+                  <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
+                  <td class="action-cell" data-sort="delete">
+                    <form method="post" action="/admin/machines/delete-line" onsubmit="return confirm('Delete this Line No.?');">
+                      <input type="hidden" name="line_id" value="{{ r.id }}">
+                      <button class="btn danger sm" type="submit">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+              {% if line_rows|length == 0 %}<tr class="no-data"><td colspan="3" class="muted">No custom lines</td></tr>{% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-machine" class="tab-panel">
+      <div class="card">
+        <h3>Machine List</h3>
+        <div class="table-wrap rows-5">
+          <table class="sortable-table">
+            <thead><tr><th data-type="text">Machine</th><th data-type="date">Created</th><th data-type="text">Action</th></tr></thead>
+            <tbody>
+              {% for r in machine_rows %}
+                <tr>
+                  <td data-sort="{{ (r.machine or '')|lower }}">{{ r.machine }}</td>
+                  <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
+                  <td class="action-cell" data-sort="delete">
+                    <form method="post" action="/admin/machines/delete-machine" onsubmit="return confirm('Delete this Machine and all linked Machine Type, Machine ID, Problem, and Support Area mapping data?');">
+                      <input type="hidden" name="machine_row_id" value="{{ r.id }}">
+                      <button class="btn danger sm" type="submit">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+              {% if machine_rows|length == 0 %}<tr class="no-data"><td colspan="3" class="muted">No custom machines</td></tr>{% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-machine-type" class="tab-panel">
+      <div class="card">
+        <h3>Machine Type List</h3>
+        <div class="table-wrap rows-5">
+          <table class="sortable-table">
+            <thead><tr><th data-type="text">Machine</th><th data-type="text">Machine Type</th><th data-type="date">Created</th><th data-type="text">Action</th></tr></thead>
+            <tbody>
+              {% for r in machine_type_rows %}
+                <tr>
+                  <td data-sort="{{ (r.machine or '')|lower }}">{{ r.machine }}</td>
+                  <td data-sort="{{ (r.machine_type or '')|lower }}">{{ r.machine_type }}</td>
+                  <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
+                  <td class="action-cell" data-sort="delete">
+                    <form method="post" action="/admin/machines/delete-machine-type" onsubmit="return confirm('Delete this Machine Type and all linked Machine ID and Problem data?');">
+                      <input type="hidden" name="machine_type_id" value="{{ r.id }}">
+                      <button class="btn danger sm" type="submit">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+              {% if machine_type_rows|length == 0 %}<tr class="no-data"><td colspan="4" class="muted">No custom machine types</td></tr>{% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-machine-id" class="tab-panel">
+      <div class="card">
+        <h3>Machine ID List</h3>
+        <div class="table-wrap rows-5">
+          <table class="sortable-table">
+            <thead><tr><th data-type="text">Machine</th><th data-type="text">Machine Type</th><th data-type="text">Machine ID</th><th data-type="date">Created</th><th data-type="text">Action</th></tr></thead>
+            <tbody>
+              {% for r in machine_id_rows %}
+                <tr>
+                  <td data-sort="{{ (r.machine or '')|lower }}">{{ r.machine }}</td>
+                  <td data-sort="{{ (r.machine_type or '')|lower }}">{{ r.machine_type }}</td>
+                  <td data-sort="{{ (r.machine_id or '')|lower }}">{{ r.machine_id }}</td>
+                  <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
+                  <td class="action-cell" data-sort="delete">
+                    <form method="post" action="/admin/machines/delete-machine-id" onsubmit="return confirm('Delete this Machine ID?');">
+                      <input type="hidden" name="machine_id_row_id" value="{{ r.id }}">
+                      <button class="btn danger sm" type="submit">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+              {% if machine_id_rows|length == 0 %}<tr class="no-data"><td colspan="5" class="muted">No custom machine IDs</td></tr>{% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-problem" class="tab-panel">
+      <div class="card">
+        <h3>Problem List</h3>
+        <div class="table-wrap rows-5">
+          <table class="sortable-table">
+            <thead><tr><th data-type="text">Machine</th><th data-type="text">Machine Type</th><th data-type="text">Problem</th><th data-type="date">Created</th><th data-type="text">Action</th></tr></thead>
+            <tbody>
+              {% for r in problem_rows %}
+                <tr>
+                  <td data-sort="{{ (r.machine or '')|lower }}">{{ r.machine }}</td>
+                  <td data-sort="{{ (r.machine_type or '')|lower }}">{{ r.machine_type or '-' }}</td>
+                  <td data-sort="{{ (r.problem or '')|lower }}">{{ r.problem }}</td>
+                  <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
+                  <td class="action-cell" data-sort="delete">
+                    <form method="post" action="/admin/machines/delete-problem" onsubmit="return confirm('Delete this Problem?');">
+                      <input type="hidden" name="problem_id" value="{{ r.id }}">
+                      <button class="btn danger sm" type="submit">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+              {% if problem_rows|length == 0 %}<tr class="no-data"><td colspan="5" class="muted">No custom problems</td></tr>{% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  const tabButtons = Array.from(document.querySelectorAll('.tab-btn[data-tab-target]'));
+  const tabPanels = Array.from(document.querySelectorAll('.tab-panel'));
+  if(tabButtons.length && tabPanels.length){
+    const activateTab = (targetId) => {
+      tabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.tabTarget === targetId));
+      tabPanels.forEach(panel => panel.classList.toggle('active', panel.id === targetId));
+    };
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', () => activateTab(btn.dataset.tabTarget));
+    });
+    const current = tabButtons.find(btn => btn.classList.contains('active')) || tabButtons[0];
+    if(current){ activateTab(current.dataset.tabTarget); }
+  }
+
+  const tables = document.querySelectorAll('.sortable-table');
+  if(!tables.length) return;
+
+  const parseValue = (row, idx, type) => {
+    const cell = row.children[idx];
+    if(!cell) return '';
+    const raw = (cell.getAttribute('data-sort') || '').trim();
+    if(type === 'date'){
+      const ts = Date.parse(raw);
+      return Number.isNaN(ts) ? 0 : ts;
+    }
+    if(type === 'number'){
+      const n = Number(raw || cell.textContent.trim());
+      return Number.isNaN(n) ? 0 : n;
+    }
+    return (raw || cell.textContent || '').trim().toLowerCase();
+  };
+
+  const compareRows = (a, b, idx, type, dir) => {
+    const av = parseValue(a, idx, type);
+    const bv = parseValue(b, idx, type);
+    if(type === 'date' || type === 'number'){
+      return (av - bv) * dir;
+    }
+    return av.localeCompare(bv, undefined, { sensitivity:'base', numeric:true }) * dir;
+  };
+
+  tables.forEach(table => {
+    const headCells = Array.from(table.querySelectorAll('thead th'));
+    const tbody = table.querySelector('tbody');
+    if(!tbody || !headCells.length) return;
+
+    let activeIdx = -1;
+    let activeDir = 1;
+
+    headCells.forEach((th, idx) => {
+      th.classList.add('sortable');
+      th.addEventListener('click', () => {
+        const type = (th.getAttribute('data-type') || 'text').toLowerCase();
+        const rows = Array.from(tbody.querySelectorAll('tr')).filter(r => !r.classList.contains('no-data'));
+        if(rows.length < 2) return;
+
+        const dir = (activeIdx === idx) ? -activeDir : 1;
+        activeIdx = idx;
+        activeDir = dir;
+
+        headCells.forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
+        th.classList.add(dir === 1 ? 'sorted-asc' : 'sorted-desc');
+
+        rows.sort((a, b) => compareRows(a, b, idx, type, dir));
+        rows.forEach(r => tbody.appendChild(r));
+      });
+    });
+  });
+})();
+</script>

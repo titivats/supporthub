@@ -1,8 +1,0 @@
-fastapi
-uvicorn[standard]
-jinja2
-SQLAlchemy>=2
-itsdangerous
-requests
-python-multipart
-xlsxwriter
