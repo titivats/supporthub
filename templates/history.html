@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="utf-8">
-  <title>History — Done & Cancelled Tickets</title>
+  <title>History - Done & Cancelled Tickets</title>
   <style>
     :root{ --bg:#f6f7fb; --card:#ffffff; --line:#e7e7ee; --muted:#6B7280; --thead:#f0f2ff; }
     *{box-sizing:border-box}
@@ -42,35 +42,31 @@
 <div class="container">
   <div class="title">Done & Cancelled Tickets</div>
 
-  <form id="filterForm" class="filters">
+  <form id="filterForm" class="filters" method="get" action="/history">
     <label>Line No.
       <select name="line_op" id="filterLine">
         <option value="">All</option>
         {% for lo in line_ops %}
           <option value="{{ lo }}" {% if line_op==lo %}selected{% endif %}>{{ lo }}</option>
         {% endfor %}
-        <!-- ตัวเลือกเพิ่มเติม -->
-        <option value="PACKING" {% if line_op=='PACKING' %}selected{% endif %}>PACKING</option>
-        <option value="REWORK" {% if line_op=='REWORK' %}selected{% endif %}>REWORK</option>
-        <option value="CLEANING" {% if line_op=='CLEANING' %}selected{% endif %}>CLEANING</option>
       </select>
     </label>
 
-    <!-- Machine (ประเภท) -->
     <label>Machine
-      <select id="filterType">
+      <select name="machine_type" id="filterType">
         <option value="">All</option>
-        <option value="Rework Machine">Rework Machine</option>
-        <!-- ✅ กลุ่มใหม่ -->
-        <option value="Etc..">Etc..</option>
+        {% for mt in machine_type_map.keys()|list|sort %}
+          <option value="{{ mt }}" {% if machine_type==mt %}selected{% endif %}>{{ mt }}</option>
+        {% endfor %}
+        {% if machine_type and machine_type not in machine_type_map %}
+          <option value="{{ machine_type }}" selected>{{ machine_type }}</option>
+        {% endif %}
       </select>
     </label>
 
-    <!-- Machine Type (รุ่น/ยี่ห้อ) -->
     <label>Machine Type
-      <select id="filterBrand">
+      <select name="machine_brand" id="filterBrand" data-selected="{{ machine_brand }}">
         <option value="">All</option>
-        <!-- ตัวเลือกจะถูกเติมตาม Machine -->
       </select>
     </label>
 
@@ -110,6 +106,7 @@
             <th>Line No.</th>
             <th>Machine</th>
             <th>Machine Type</th>
+            <th>Machine ID</th>
             <th>Problem</th>
             <th class="wrap-text">Description</th>
             <th>Doing</th>
@@ -124,23 +121,13 @@
         </thead>
         <tbody id="tbody">
           {% for r in rows %}
-          {% set raw = (r.equipment or '') %}
-          {% set type = (raw.split('||')[0] if '||' in raw else (r.equipment_type or r.machine)) %}
-          {% set brand = (raw.split('||')[1] if '||' in raw else raw) %}
-          {# ถ้า brand คือ Other M/C or Tools แต่ไม่มี type ให้จัดเป็น Etc.. #}
-          {% if '||' not in raw and (brand|lower == 'other m/c or tools') %}
-            {% set type = 'Etc..' %}
-          {% endif %}
+          {% set type = (r.history_machine or '') %}
+          {% set brand = (r.history_machine_type or '') %}
           {% set sum_secs = ((r.closed_at - r.created_at).total_seconds() if r.closed_at and r.created_at else 0) | int %}
           {% set doing    = (r.doing_secs or 0) | int %}
           {% set hold     = (r.hold_secs  or 0) | int %}
-          {% set wait_secs = (sum_secs - doing - hold) if sum_secs>0 else 0 %}
-          <tr id="row-{{ r.id }}"
-              data-type="{{ (type or '')|e }}"
-              data-brand="{{ (brand or '')|e }}"
-              data-line="{{ r.machine|e }}"
-              data-created="{{ (r.created_at.isoformat() if r.created_at else '')|e }}"
-              data-closed="{{ (r.closed_at.isoformat() if r.closed_at else '')|e }}">
+          {% set wait_secs = (sum_secs - doing - hold) if (sum_secs - doing - hold) > 0 else 0 %}
+          <tr id="row-{{ r.id }}">
             <td><button class="id-btn" type="button" data-id="{{ r.id }}">{{ r.id }}</button></td>
             <td>
               {% if r.status == 'CANCELLED' %}
@@ -154,7 +141,8 @@
             <td>{{ r.requester }}</td>
             <td>{{ r.machine }}</td>
             <td>{{ (type or '') }}</td>
-            <td>{{ brand }}</td>
+            <td>{{ brand or '-' }}</td>
+            <td>{{ r.machine_id or '-' }}</td>
             <td>{{ r.problem or '' }}</td>
             <td class="wrap-text">{{ r.description or '-' }}</td>
             <td>{{ hms(doing) }}</td>
@@ -177,8 +165,8 @@
   </div>
 </div>
 
+<script id="machine-type-map-data" type="application/json">{{ machine_type_map | tojson }}</script>
 <script>
-/* ====== element refs ====== */
 const tbody = document.getElementById('tbody');
 const selType  = document.getElementById('filterType');
 const selBrand = document.getElementById('filterBrand');
@@ -187,164 +175,97 @@ const startInp = document.getElementById('filterStart');
 const endInp   = document.getElementById('filterEnd');
 const btnExport = document.getElementById('exportBtn');
 
-const REWORK_TYPES = ['SRT Machine','Minipot','Oven'];
-const ETC_TYPES    = ['Other M/C or Tools']; // สำหรับกลุ่ม Etc..
-const EXCLUDED_MACHINE_TYPES = ['BT01','BT02','BT03','REWORK']; // ตัดออกจาก dropdown Machine
+let machineTypeMap = {};
+try { machineTypeMap = JSON.parse(document.getElementById('machine-type-map-data').textContent || '{}'); }
+catch (_) { machineTypeMap = {}; }
 
-/* ====== Utilities ====== */
-function uniqueValuesFromAttr(attr, filterType=null){
-  const set = new Set();
-  [...tbody.querySelectorAll('tr')].forEach(tr=>{
-    if(filterType && tr.getAttribute('data-type') !== filterType) return;
-    const val = tr.getAttribute(attr) || '';
-    if(val) set.add(val);
-  });
-  return [...set].sort((a,b)=>a.localeCompare(b));
+function uniqueSorted(values){
+  return [...new Set((values || []).filter(Boolean))].sort((a,b)=>a.localeCompare(b, undefined, { sensitivity:'base', numeric:true }));
 }
+
 function ensureOption(select, value, label){
-  const exists = [...select.options].some(o=>o.value===value);
-  if(!exists){
-    const o = document.createElement('option');
-    o.value = value; o.textContent = label || value;
-    select.appendChild(o);
-  }
+  if(!value) return;
+  const exists = Array.from(select.options).some(o => o.value === value);
+  if(exists) return;
+  const o = document.createElement('option');
+  o.value = value;
+  o.textContent = label || value;
+  select.appendChild(o);
 }
 
-/* ====== Build options ====== */
-function populateTypeOptions(){
-  selType.innerHTML = '<option value="">All</option>';
-  // ให้มีตัวเลือกเหล่านี้แน่นอน
-  ensureOption(selType, 'Rework Machine', 'Rework Machine');
-  ensureOption(selType, 'Etc..', 'Etc..');
-  // เติมชนิดอื่น ๆ จากข้อมูล (ตัด BT01/BT02/BT03/REWORK)
-  uniqueValuesFromAttr('data-type').forEach(v=>{
-    if(!v) return;
-    if(EXCLUDED_MACHINE_TYPES.includes(v.toUpperCase())) return;
-    ensureOption(selType, v, v);
-  });
+function getBrandsForType(machineType){
+  return uniqueSorted(machineTypeMap[machineType] || []);
 }
+
+function getAllBrands(){
+  const all = [];
+  Object.keys(machineTypeMap || {}).forEach(type => {
+    all.push(...(machineTypeMap[type] || []));
+  });
+  return uniqueSorted(all);
+}
+
 function populateBrandOptions(){
-  const t = selType.value || '';
+  const selected = (selBrand.getAttribute('data-selected') || selBrand.value || '').trim();
+  const machineType = (selType.value || '').trim();
+  const brands = machineType ? getBrandsForType(machineType) : getAllBrands();
+
   selBrand.innerHTML = '<option value="">All</option>';
+  brands.forEach(v => ensureOption(selBrand, v, v));
 
-  if(t === 'Rework Machine'){
-    REWORK_TYPES.forEach(v=> ensureOption(selBrand, v, v));
-    return;
+  if(selected){
+    ensureOption(selBrand, selected, selected);
+    selBrand.value = selected;
+  }else{
+    selBrand.value = '';
   }
-  if(t === 'Etc..'){
-    ETC_TYPES.forEach(v=> ensureOption(selBrand, v, v));
-    return;
-  }
-
-  // กรณี All หรือ Machine อื่น ๆ → ดึงยี่ห้อจากข้อมูล
-  // และตัดชุดพิเศษของ Rework/Etc.. ออก
-  const brands = uniqueValuesFromAttr('data-brand', t || null);
-  brands.forEach(v=>{
-    if(REWORK_TYPES.includes(v)) return;
-    if(ETC_TYPES.includes(v)) return;
-    ensureOption(selBrand, v, v);
-  });
 }
 
-selType.addEventListener('change', ()=>{ selBrand.value=''; populateBrandOptions(); });
-
-/* ====== กรองข้อมูล ====== */
-function applyFilters(){
-  const fType  = selType.value;
-  const fBrand = selBrand.value;
-  const fLine  = selLine.value;
-  const fStart = startInp.value ? new Date(startInp.value+"T00:00:00") : null;
-  const fEnd   = endInp.value   ? new Date(endInp.value+"T23:59:59") : null;
-
-  [...tbody.querySelectorAll('tr')].forEach(tr=>{
-    const t  = tr.getAttribute('data-type') || '';
-    const b  = tr.getAttribute('data-brand') || '';
-    const ln = tr.getAttribute('data-line') || '';
-    const cr = tr.getAttribute('data-created') || '';
-    const cl = tr.getAttribute('data-closed') || '';
-
-    let ok = true;
-    if(fType && t !== fType) ok = false;
-    if(ok && fBrand && b !== fBrand) ok = false;
-    if(ok && fLine && ln !== fLine) ok = false;
-
-    if(ok && (fStart || fEnd)){
-      const created = cr ? new Date(cr) : null;
-      const closed  = cl ? new Date(cl) : null;
-      const inRange = (dt)=>{
-        if(!dt) return true;
-        if(fStart && dt < fStart) return false;
-        if(fEnd   && dt > fEnd)   return false;
-        return true;
-      };
-      if(!(inRange(created) || inRange(closed))) ok = false;
-    }
-
-    tr.style.display = ok ? '' : 'none';
-  });
-}
-
-/* Intercept ฟอร์มให้กรองในหน้า */
-document.getElementById('filterForm').addEventListener('submit', (e)=>{
-  e.preventDefault();
-  applyFilters();
-});
-document.getElementById('btnClear').addEventListener('click', ()=>{
-  selType.value='';
-  selBrand.value='';
-  selLine.value='';
-  startInp.value='';
-  endInp.value='';
+selType.addEventListener('change', ()=>{
+  selBrand.setAttribute('data-selected', '');
   populateBrandOptions();
-  applyFilters();
 });
 
-/* ====== เลือกแถว (ไฮไลท์) ====== */
+document.getElementById('btnClear').addEventListener('click', ()=>{
+  window.location.href = '/history';
+});
+
+function buildHistoryParams(){
+  const params = new URLSearchParams();
+  const line = (selLine.value || '').trim();
+  const machineType = (selType.value || '').trim();
+  const machineBrand = (selBrand.value || '').trim();
+  const startDate = (startInp.value || '').trim();
+  const endDate = (endInp.value || '').trim();
+
+  if(line) params.set('line_op', line);
+  if(machineType) params.set('machine_type', machineType);
+  if(machineBrand) params.set('machine_brand', machineBrand);
+  if(startDate) params.set('start_date', startDate);
+  if(endDate) params.set('end_date', endDate);
+  return params;
+}
+
+btnExport.addEventListener('click', ()=>{
+  const params = buildHistoryParams();
+  window.location.href = `/export/excel?${params.toString()}`;
+});
+
+populateBrandOptions();
+
 let selectedTr = null;
 tbody.addEventListener('click', (e)=>{
   const tr = e.target.closest('tr');
   if(!tr) return;
   if(selectedTr === tr){
     tr.classList.toggle('row-selected');
-    if(!tr.classList.contains('row-selected')) selectedTr=null;
+    if(!tr.classList.contains('row-selected')) selectedTr = null;
     return;
   }
   if(selectedTr) selectedTr.classList.remove('row-selected');
   tr.classList.add('row-selected');
   selectedTr = tr;
 });
-
-/* ====== Export (เรียกเซิร์ฟเวอร์สร้าง .xlsx จริง) ====== */
-function buildExportURL(){
-  const params = new URLSearchParams();
-  const line  = selLine.value || "";
-  const type  = selType.value || "";
-  const brand = selBrand.value || "";
-  const sd    = startInp.value || "";
-  const ed    = endInp.value || "";
-
-  if(line) params.set("line_op", line);
-  // ส่ง equipment เฉพาะกรณีที่ระบุได้แน่ชัด
-  if(type && brand){
-    params.set("equipment", `${type}||${brand}`);
-  } else if(!type && brand){
-    // บางเรคคอร์ดเก่าเก็บแค่ brand เดี่ยว ๆ
-    params.set("equipment", brand);
-  }
-  if(sd) params.set("start_date", sd);
-  if(ed) params.set("end_date", ed);
-
-  return `/export/excel?${params.toString()}`;
-}
-btnExport.addEventListener('click', ()=>{
-  // ใช้ GET ไปยัง /export/excel จะได้ไฟล์ .xlsx จริง — ไม่มี popup เตือนอีก
-  window.location.href = buildExportURL();
-});
-
-/* ====== INIT ====== */
-populateTypeOptions();
-populateBrandOptions();
-applyFilters();
 </script>
 <script>
 function goBack(){
