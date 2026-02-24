@@ -1,12 +1,14 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>Master Data Management - SupportHub</title>
+<title>Add Machine - SupportHub</title>
 <style>
   :root{
     --bg:#f6f7fb;
     --card:#ffffff;
     --line:#e7e7ee;
     --muted:#6b7280;
+    --headbg:#e6e9f3;
+    --headline:#d2d8e6;
     --ok:#065f46;
     --okbg:#dcfce7;
     --warn:#92400e;
@@ -160,16 +162,18 @@
     display:grid;
     gap:10px;
   }
+  .inline-action{
+    display:grid;
+    grid-template-columns:minmax(0, 1fr) auto;
+    gap:10px;
+    align-items:end;
+  }
   input, select{
     width:100%;
     padding:9px 10px;
     border:1px solid #d7d9e0;
     border-radius:10px;
     background:#fff;
-  }
-  .action-row{
-    display:flex;
-    justify-content:flex-end;
   }
   .table-wrap{
     overflow:auto;
@@ -241,12 +245,14 @@
     padding:12px;
   }
   .group-head{
-    margin:0 0 10px;
-    border-bottom:1px solid var(--line);
-    padding-bottom:9px;
+    margin:-12px -12px 12px;
+    padding:12px 14px;
+    background:var(--headbg);
+    border:1px solid var(--headline);
+    border-radius:12px 12px 0 0;
   }
   .group-head h3{
-    margin:0 0 4px;
+    margin:0 0 5px;
     font-size:16px;
   }
   .group-note{
@@ -295,6 +301,20 @@
   .tab-panel.active{
     display:block;
   }
+  .section-band{
+    background:var(--headbg);
+    border:1px solid var(--headline);
+    border-radius:12px;
+    padding:12px 14px;
+    margin-bottom:12px;
+  }
+  .section-band h2{
+    margin:0 0 5px;
+    font-size:16px;
+  }
+  .section-band .section-note{
+    margin:0;
+  }
   @media (max-width: 980px){
     .top{ flex-direction:column; align-items:stretch; }
     .section-head{ align-items:stretch; }
@@ -310,7 +330,7 @@
 <div class="container">
   <div class="top">
     <div>
-      <h1>Master Data Management</h1>
+      <h1>Add Machine</h1>
       <div class="lead">Manage dropdown values used in Active Tickets: Support Area, Line No., Machine, Machine Type, Machine ID, and Problem.</div>
     </div>
     <div class="actions">
@@ -334,18 +354,18 @@
         <div class="card group-card">
           <div class="group-head">
             <h3>Core Data</h3>
-            <p class="group-note">Line, Machine, and Support Area master lists.</p>
+            <p class="group-note">Line, Machine, and Machine Type master lists.</p>
           </div>
           <div class="mini-grid">
             <div class="mini-card">
               <h4>Add Line No.</h4>
               <div class="note">Example: BT10, PACKING-2</div>
               <form class="form-row" method="post" action="/admin/machines/add-line">
-                <div>
-                  <label>Line No.</label>
-                  <input name="line_no" required placeholder="Line No.">
-                </div>
-                <div class="action-row">
+                <div class="inline-action">
+                  <div>
+                    <label>Line No.</label>
+                    <input name="line_no" required placeholder="Line No.">
+                  </div>
                   <button class="btn primary" type="submit">Add Line</button>
                 </div>
               </form>
@@ -355,62 +375,12 @@
               <h4>Add Machine</h4>
               <div class="note">Example: Laser Marking</div>
               <form class="form-row" method="post" action="/admin/machines/add-machine">
-                <div>
-                  <label>Machine</label>
-                  <input name="machine" required placeholder="Machine">
-                </div>
-                <div class="action-row">
+                <div class="inline-action">
+                  <div>
+                    <label>Machine</label>
+                    <input name="machine" required placeholder="Machine">
+                  </div>
                   <button class="btn primary" type="submit">Add Machine</button>
-                </div>
-              </form>
-            </div>
-
-            <div class="mini-card">
-              <h4>Add Support Area</h4>
-              <div class="note">Example: Backline, Inspection, Coating & Robotic, Rework or custom area.</div>
-              <form class="form-row" method="post" action="/admin/machines/add-support-area">
-                <div>
-                  <label>Support Area</label>
-                  <input name="support_area" required placeholder="Support Area">
-                </div>
-                <div class="action-row">
-                  <button class="btn primary" type="submit">Add Support Area</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        <div class="card group-card">
-          <div class="group-head">
-            <h3>Mapping & Structure</h3>
-            <p class="group-note">Support Area mapping, Machine Type, and Machine ID.</p>
-          </div>
-          <div class="mini-grid">
-            <div class="mini-card">
-              <h4>Map Support Area to Machine</h4>
-              <div class="note">When user selects Support Area in Active Tickets, only mapped Machines are shown.</div>
-              <form class="form-row" method="post" action="/admin/machines/add-support-area-machine">
-                <div>
-                  <label>Support Area</label>
-                  <select name="support_area" required>
-                    <option value="">-- Select Support Area --</option>
-                    {% for sa in support_area_options %}
-                      <option value="{{ sa }}">{{ sa }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div>
-                  <label>Machine</label>
-                  <select name="machine" required>
-                    <option value="">-- Select Machine --</option>
-                    {% for m in machine_options %}
-                      <option value="{{ m }}">{{ m }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div class="action-row">
-                  <button class="btn primary" type="submit">Add Mapping</button>
                 </div>
               </form>
             </div>
@@ -428,12 +398,62 @@
                     {% endfor %}
                   </select>
                 </div>
-                <div>
-                  <label>Machine Type</label>
-                  <input name="machine_type" required placeholder="Machine Type">
-                </div>
-                <div class="action-row">
+                <div class="inline-action">
+                  <div>
+                    <label>Machine Type</label>
+                    <input name="machine_type" required placeholder="Machine Type">
+                  </div>
                   <button class="btn primary" type="submit">Add Machine Type</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="card group-card">
+          <div class="group-head">
+            <h3>Mapping & Structure</h3>
+            <p class="group-note">Support Area setup/mapping and Machine ID.</p>
+          </div>
+          <div class="mini-grid">
+            <div class="mini-card">
+              <h4>Map Support Area to Machine</h4>
+              <div class="note">When user selects Support Area in Active Tickets, only mapped Machines are shown.</div>
+              <form class="form-row" method="post" action="/admin/machines/add-support-area-machine">
+                <div>
+                  <label>Support Area</label>
+                  <select name="support_area" required>
+                    <option value="">-- Select Support Area --</option>
+                    {% for sa in support_area_options %}
+                      <option value="{{ sa }}">{{ sa }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="inline-action">
+                  <div>
+                    <label>Machine</label>
+                    <select name="machine" required>
+                      <option value="">-- Select Machine --</option>
+                      {% for m in machine_options %}
+                        <option value="{{ m }}">{{ m }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <button class="btn primary" type="submit">Add Mapping</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="mini-card">
+              <h4>Add Support Area</h4>
+              <div class="note">Example: Backline, Inspection, Coating & Robotic, Rework or custom area.</div>
+              <form class="form-row" method="post" action="/admin/machines/add-support-area">
+                <div class="inline-action">
+                  <div>
+                    <label>Support Area</label>
+                    <input name="support_area" required placeholder="Support Area">
+                  </div>
+                  <button class="btn primary" type="submit">Add Support Area</button>
                 </div>
               </form>
             </div>
@@ -444,7 +464,7 @@
               <form class="form-row" method="post" action="/admin/machines/add-machine-id">
                 <div>
                   <label>Machine</label>
-                  <select name="machine" required>
+                  <select name="machine" id="add-machine-id-machine" required>
                     <option value="">-- Select Machine --</option>
                     {% for m in machine_options %}
                       <option value="{{ m }}">{{ m }}</option>
@@ -453,13 +473,15 @@
                 </div>
                 <div>
                   <label>Machine Type</label>
-                  <input name="machine_type" required placeholder="Machine Type">
+                  <select name="machine_type" id="add-machine-id-type" required>
+                    <option value="">-- Select Machine Type --</option>
+                  </select>
                 </div>
-                <div>
-                  <label>Machine ID</label>
-                  <input name="machine_id" required placeholder="Machine ID">
-                </div>
-                <div class="action-row">
+                <div class="inline-action">
+                  <div>
+                    <label>Machine ID</label>
+                    <input name="machine_id" required placeholder="Machine ID">
+                  </div>
                   <button class="btn primary" type="submit">Add Machine ID</button>
                 </div>
               </form>
@@ -479,7 +501,7 @@
               <form class="form-row" method="post" action="/admin/machines/add-problem">
                 <div>
                   <label>Machine</label>
-                  <select name="machine" required>
+                  <select name="machine" id="add-problem-machine" required>
                     <option value="">-- Select Machine --</option>
                     {% for m in machine_options %}
                       <option value="{{ m }}">{{ m }}</option>
@@ -488,13 +510,15 @@
                 </div>
                 <div>
                   <label>Machine Type (Optional)</label>
-                  <input name="machine_type" placeholder="Machine Type">
+                  <select name="machine_type" id="add-problem-type">
+                    <option value="">-- Machine Level (Optional) --</option>
+                  </select>
                 </div>
-                <div>
-                  <label>Problem</label>
-                  <input name="problem" required placeholder="Problem">
-                </div>
-                <div class="action-row">
+                <div class="inline-action">
+                  <div>
+                    <label>Problem</label>
+                    <input name="problem" required placeholder="Problem">
+                  </div>
                   <button class="btn primary" type="submit">Add Problem</button>
                 </div>
               </form>
@@ -505,10 +529,10 @@
   </section>
 
   <section class="section">
-    <div class="section-head">
+    <div class="section-head section-band">
       <div>
         <h2>Existing Data</h2>
-        <div class="section-note">Current values in the system. Each table shows up to 5 rows and can scroll for more. Click column header to sort, or use Delete to remove items.</div>
+        <div class="section-note">Current values in the system. Each table shows up to 5 rows and can scroll for more. Click column header to sort, use Delete to remove items, and check Update History to see who added/deleted data.</div>
       </div>
       <div class="section-tools">
         <a class="btn primary" href="/admin/machines/export/excel">Export Excel</a>
@@ -522,6 +546,7 @@
       <button type="button" class="tab-btn" data-tab-target="tab-machine-type">Machine Type ({{ machine_type_rows|length }})</button>
       <button type="button" class="tab-btn" data-tab-target="tab-machine-id">Machine ID ({{ machine_id_rows|length }})</button>
       <button type="button" class="tab-btn" data-tab-target="tab-problem">Problem ({{ problem_rows|length }})</button>
+      <button type="button" class="tab-btn" data-tab-target="tab-audit">Update History ({{ audit_rows|length }})</button>
     </div>
 
     <div id="tab-support-area" class="tab-panel active">
@@ -711,11 +736,43 @@
         </div>
       </div>
     </div>
+
+    <div id="tab-audit" class="tab-panel">
+      <div class="card">
+        <h3>Update History</h3>
+        <div class="table-wrap rows-5">
+          <table class="sortable-table">
+            <thead><tr><th data-type="date">Created</th><th data-type="text">User</th><th data-type="text">Action</th><th data-type="text">Data Type</th><th data-type="text">Item</th><th data-type="text">Details</th></tr></thead>
+            <tbody>
+              {% for r in audit_rows %}
+                <tr>
+                  <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
+                  <td data-sort="{{ (r.actor or '')|lower }}">{{ r.actor or '-' }}</td>
+                  <td data-sort="{{ (r.action or '')|lower }}">{{ r.action or '-' }}</td>
+                  <td data-sort="{{ (r.data_type or '')|lower }}">{{ r.data_type or '-' }}</td>
+                  <td data-sort="{{ (r.item or '')|lower }}">{{ r.item or '-' }}</td>
+                  <td data-sort="{{ (r.details or '')|lower }}">{{ r.details or '-' }}</td>
+                </tr>
+              {% endfor %}
+              {% if audit_rows|length == 0 %}<tr class="no-data"><td colspan="6" class="muted">No update history</td></tr>{% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </section>
 </div>
 
+<script id="machine-type-map-data" type="application/json">{{ machine_type_map | tojson }}</script>
 <script>
 (function(){
+  let machineTypeMap = {};
+  try{
+    machineTypeMap = JSON.parse(document.getElementById('machine-type-map-data')?.textContent || "{}");
+  }catch(_){
+    machineTypeMap = {};
+  }
+
   const tabButtons = Array.from(document.querySelectorAll('.tab-btn[data-tab-target]'));
   const tabPanels = Array.from(document.querySelectorAll('.tab-panel'));
   if(tabButtons.length && tabPanels.length){
@@ -729,6 +786,81 @@
     const current = tabButtons.find(btn => btn.classList.contains('active')) || tabButtons[0];
     if(current){ activateTab(current.dataset.tabTarget); }
   }
+
+  const getTypesForMachine = (machine) => {
+    const direct = machineTypeMap[machine];
+    if(Array.isArray(direct)) return direct;
+    const key = Object.keys(machineTypeMap).find(k => (k || '').toLowerCase() === (machine || '').toLowerCase());
+    if(!key) return [];
+    return Array.isArray(machineTypeMap[key]) ? machineTypeMap[key] : [];
+  };
+  const uniqueSorted = (vals) => {
+    const seen = new Set();
+    const out = [];
+    (vals || []).forEach(v => {
+      const text = (v || '').trim();
+      const k = text.toLowerCase();
+      if(!text || seen.has(k)) return;
+      seen.add(k);
+      out.push(text);
+    });
+    return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity:'base', numeric:true }));
+  };
+  const bindMachineTypeSelect = (machineSelect, machineTypeSelect, opts = {}) => {
+    if(!machineSelect || !machineTypeSelect) return;
+    const required = opts.required !== false;
+    const requiredPlaceholder = opts.requiredPlaceholder || '-- Select Machine Type --';
+    const optionalPlaceholder = opts.optionalPlaceholder || '-- Machine Level (Optional) --';
+    const noMachinePlaceholder = opts.noMachinePlaceholder || '-- Select Machine First --';
+    const noTypePlaceholder = opts.noTypePlaceholder || '-- No Machine Type --';
+
+    const setMachineTypes = () => {
+      const machine = (machineSelect.value || '').trim();
+      const prev = machineTypeSelect.value;
+      const items = uniqueSorted(getTypesForMachine(machine));
+      machineTypeSelect.innerHTML = '';
+
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      if(!machine){
+        placeholder.textContent = noMachinePlaceholder;
+      }else if(!required){
+        placeholder.textContent = optionalPlaceholder;
+      }else if(items.length === 0){
+        placeholder.textContent = noTypePlaceholder;
+      }else{
+        placeholder.textContent = requiredPlaceholder;
+      }
+      machineTypeSelect.appendChild(placeholder);
+
+      items.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item;
+        option.textContent = item;
+        machineTypeSelect.appendChild(option);
+      });
+
+      if(items.some(v => v.toLowerCase() === (prev || '').toLowerCase())){
+        machineTypeSelect.value = items.find(v => v.toLowerCase() === (prev || '').toLowerCase()) || '';
+      }else{
+        machineTypeSelect.value = '';
+      }
+    };
+
+    machineSelect.addEventListener('change', setMachineTypes);
+    setMachineTypes();
+  };
+
+  bindMachineTypeSelect(
+    document.getElementById('add-machine-id-machine'),
+    document.getElementById('add-machine-id-type'),
+    { required:true }
+  );
+  bindMachineTypeSelect(
+    document.getElementById('add-problem-machine'),
+    document.getElementById('add-problem-type'),
+    { required:false, optionalPlaceholder:'-- Machine Level (Optional) --' }
+  );
 
   const tables = document.querySelectorAll('.sortable-table');
   if(!tables.length) return;

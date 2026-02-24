@@ -112,6 +112,15 @@ class Ticket(Base):
         self.cancel_reason = (reason or "").strip()
         self.canceled_by = by
 
+class TicketTakeoverLog(Base):
+    __tablename__ = "ticket_takeover_logs"
+    id = Column(Integer, primary_key=True)
+    ticket_id = Column(Integer, nullable=False, index=True)
+    from_actor = Column(String(50), nullable=True)
+    to_actor = Column(String(50), nullable=False)
+    status = Column(String(12), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
 class MasterLine(Base):
     __tablename__ = "master_lines"
     id = Column(Integer, primary_key=True)
@@ -170,6 +179,16 @@ class AppSetting(Base):
     key = Column(String(100), nullable=False, unique=True, index=True)
     value = Column(String(200), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+class MasterAuditLog(Base):
+    __tablename__ = "master_audit_logs"
+    id = Column(Integer, primary_key=True)
+    action = Column(String(20), nullable=False, index=True)       # ADD/DELETE
+    data_type = Column(String(50), nullable=False, index=True)     # LINE/MACHINE/...
+    item = Column(String(250), nullable=False)
+    actor = Column(String(50), nullable=False, index=True)
+    details = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 Base.metadata.create_all(bind=engine)
 
@@ -624,6 +643,20 @@ def _build_master_data(db: Session) -> Dict[str, object]:
 def _master_status_text(status_key: str) -> str:
     return MASTER_STATUS_TEXT.get(status_key or "", "")
 
+def _add_master_audit(db: Session,
+                      actor: str,
+                      action: str,
+                      data_type: str,
+                      item: str,
+                      details: Optional[str] = None):
+    db.add(MasterAuditLog(
+        action=_clean_text(action).upper(),
+        data_type=_clean_text(data_type).upper(),
+        item=_clean_text(item),
+        actor=_clean_text(actor) or "-",
+        details=_clean_text(details) or None,
+    ))
+
 def _get_master_rows_sorted(db: Session, sort_time: str) -> Dict[str, list]:
     newest = sort_time != "asc"
     if newest:
@@ -635,6 +668,7 @@ def _get_master_rows_sorted(db: Session, sort_time: str) -> Dict[str, list]:
             "support_area_rows": db.query(MasterSupportArea).order_by(MasterSupportArea.created_at.desc(), MasterSupportArea.id.desc()).all(),
             "support_area_map_rows": db.query(MasterSupportAreaMap).order_by(MasterSupportAreaMap.created_at.desc(), MasterSupportAreaMap.id.desc()).all(),
             "problem_rows": db.query(MasterProblem).order_by(MasterProblem.created_at.desc(), MasterProblem.id.desc()).all(),
+            "audit_rows": db.query(MasterAuditLog).order_by(MasterAuditLog.created_at.desc(), MasterAuditLog.id.desc()).all(),
         }
     return {
         "line_rows": db.query(MasterLine).order_by(MasterLine.created_at.asc(), MasterLine.id.asc()).all(),
@@ -644,6 +678,7 @@ def _get_master_rows_sorted(db: Session, sort_time: str) -> Dict[str, list]:
         "support_area_rows": db.query(MasterSupportArea).order_by(MasterSupportArea.created_at.asc(), MasterSupportArea.id.asc()).all(),
         "support_area_map_rows": db.query(MasterSupportAreaMap).order_by(MasterSupportAreaMap.created_at.asc(), MasterSupportAreaMap.id.asc()).all(),
         "problem_rows": db.query(MasterProblem).order_by(MasterProblem.created_at.asc(), MasterProblem.id.asc()).all(),
+        "audit_rows": db.query(MasterAuditLog).order_by(MasterAuditLog.created_at.asc(), MasterAuditLog.id.asc()).all(),
     }
 
 # ---------- Utils ----------
@@ -795,6 +830,7 @@ def admin_machines(request: Request, db: Session = Depends(get_db)):
         "support_area_rows": rows["support_area_rows"],
         "support_area_map_rows": rows["support_area_map_rows"],
         "problem_rows": rows["problem_rows"],
+        "audit_rows": rows["audit_rows"],
         "machine_options": master["machine_list"],
         "support_area_options": master["support_areas"],
         "machine_type_map": master["machine_type_map"],
@@ -821,6 +857,7 @@ def admin_export_machines_excel(request: Request, db: Session = Depends(get_db))
     support_area_rows = rows["support_area_rows"]
     support_area_map_rows = rows["support_area_map_rows"]
     problem_rows = rows["problem_rows"]
+    audit_rows = rows["audit_rows"]
 
     buf = io.BytesIO()
     wb = xlsxwriter.Workbook(buf, {'in_memory': True})
@@ -883,6 +920,12 @@ def admin_export_machines_excel(request: Request, db: Session = Depends(get_db))
         [[r.machine or "-", r.machine_type or "-", r.problem or "-", fmt_th(r.created_at)] for r in problem_rows],
         [24, 26, 36, 20],
     )
+    make_sheet(
+        "Audit Log",
+        ["Created (TH)", "User", "Action", "Data Type", "Item", "Details"],
+        [[fmt_th(r.created_at), r.actor or "-", r.action or "-", r.data_type or "-", r.item or "-", r.details or "-"] for r in audit_rows],
+        [20, 16, 10, 16, 40, 42],
+    )
 
     wb.close()
     buf.seek(0)
@@ -909,6 +952,7 @@ def admin_add_support_area(request: Request, support_area: str = Form(...), db: 
         return RedirectResponse("/admin/machines?status=support_area_exists", status_code=303)
 
     db.add(MasterSupportArea(support_area=area_val))
+    _add_master_audit(db, me.username, "ADD", "SUPPORT_AREA", area_val)
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=support_area_added", status_code=303)
@@ -930,10 +974,12 @@ def admin_add_support_area_machine(request: Request,
     area_exists = db.query(MasterSupportArea).filter(MasterSupportArea.support_area == area_val).first()
     if not area_exists:
         db.add(MasterSupportArea(support_area=area_val))
+        _add_master_audit(db, me.username, "ADD", "SUPPORT_AREA", area_val, details="auto-created by support area mapping")
 
     machine_exists = db.query(MasterMachine).filter(MasterMachine.machine == machine_val).first()
     if not machine_exists:
         db.add(MasterMachine(machine=machine_val))
+        _add_master_audit(db, me.username, "ADD", "MACHINE", machine_val, details="auto-created by support area mapping")
 
     exists = db.query(MasterSupportAreaMap).filter(
         MasterSupportAreaMap.support_area == area_val,
@@ -943,6 +989,7 @@ def admin_add_support_area_machine(request: Request,
         return RedirectResponse("/admin/machines?status=support_area_map_exists", status_code=303)
 
     db.add(MasterSupportAreaMap(support_area=area_val, machine=machine_val))
+    _add_master_audit(db, me.username, "ADD", "SUPPORT_AREA_MAP", f"{area_val} -> {machine_val}")
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=support_area_map_added", status_code=303)
@@ -957,7 +1004,9 @@ def admin_delete_support_area_machine(request: Request, map_id: int = Form(...),
     if not row:
         return RedirectResponse("/admin/machines?status=support_area_map_not_found", status_code=303)
 
+    row_key = f"{_clean_text(row.support_area)} -> {_clean_text(row.machine)}"
     db.delete(row)
+    _add_master_audit(db, me.username, "DELETE", "SUPPORT_AREA_MAP", row_key)
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=support_area_map_deleted", status_code=303)
@@ -973,9 +1022,18 @@ def admin_delete_support_area(request: Request, support_area_id: int = Form(...)
         return RedirectResponse("/admin/machines?status=support_area_not_found", status_code=303)
 
     area_val = _clean_text(row.support_area)
+    deleted_maps = 0
     if area_val:
-        db.query(MasterSupportAreaMap).filter(MasterSupportAreaMap.support_area == area_val).delete(synchronize_session=False)
+        deleted_maps = db.query(MasterSupportAreaMap).filter(MasterSupportAreaMap.support_area == area_val).delete(synchronize_session=False)
     db.delete(row)
+    _add_master_audit(
+        db,
+        me.username,
+        "DELETE",
+        "SUPPORT_AREA",
+        area_val or "-",
+        details=f"cascade_mappings={deleted_maps}",
+    )
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=support_area_deleted", status_code=303)
@@ -990,7 +1048,9 @@ def admin_delete_line(request: Request, line_id: int = Form(...), db: Session = 
     if not row:
         return RedirectResponse("/admin/machines?status=line_not_found", status_code=303)
 
+    line_val = _clean_text(row.line_no)
     db.delete(row)
+    _add_master_audit(db, me.username, "DELETE", "LINE", line_val or "-")
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=line_deleted", status_code=303)
@@ -1006,12 +1066,21 @@ def admin_delete_machine(request: Request, machine_row_id: int = Form(...), db: 
         return RedirectResponse("/admin/machines?status=machine_not_found", status_code=303)
 
     machine_val = _clean_text(row.machine)
+    deleted_map = deleted_ids = deleted_types = deleted_probs = 0
     if machine_val:
-        db.query(MasterSupportAreaMap).filter(MasterSupportAreaMap.machine == machine_val).delete(synchronize_session=False)
-        db.query(MasterMachineId).filter(MasterMachineId.machine == machine_val).delete(synchronize_session=False)
-        db.query(MasterMachineType).filter(MasterMachineType.machine == machine_val).delete(synchronize_session=False)
-        db.query(MasterProblem).filter(MasterProblem.machine == machine_val).delete(synchronize_session=False)
+        deleted_map = db.query(MasterSupportAreaMap).filter(MasterSupportAreaMap.machine == machine_val).delete(synchronize_session=False)
+        deleted_ids = db.query(MasterMachineId).filter(MasterMachineId.machine == machine_val).delete(synchronize_session=False)
+        deleted_types = db.query(MasterMachineType).filter(MasterMachineType.machine == machine_val).delete(synchronize_session=False)
+        deleted_probs = db.query(MasterProblem).filter(MasterProblem.machine == machine_val).delete(synchronize_session=False)
     db.delete(row)
+    _add_master_audit(
+        db,
+        me.username,
+        "DELETE",
+        "MACHINE",
+        machine_val or "-",
+        details=f"cascade_maps={deleted_map},cascade_machine_ids={deleted_ids},cascade_machine_types={deleted_types},cascade_problems={deleted_probs}",
+    )
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=machine_deleted", status_code=303)
@@ -1028,16 +1097,25 @@ def admin_delete_machine_type(request: Request, machine_type_id: int = Form(...)
 
     machine_val = _clean_text(row.machine)
     machine_type_val = _clean_text(row.machine_type)
+    deleted_ids = deleted_probs = 0
     if machine_val and machine_type_val:
-        db.query(MasterMachineId).filter(
+        deleted_ids = db.query(MasterMachineId).filter(
             MasterMachineId.machine == machine_val,
             MasterMachineId.machine_type == machine_type_val,
         ).delete(synchronize_session=False)
-        db.query(MasterProblem).filter(
+        deleted_probs = db.query(MasterProblem).filter(
             MasterProblem.machine == machine_val,
             MasterProblem.machine_type == machine_type_val,
         ).delete(synchronize_session=False)
     db.delete(row)
+    _add_master_audit(
+        db,
+        me.username,
+        "DELETE",
+        "MACHINE_TYPE",
+        f"{machine_val} || {machine_type_val}",
+        details=f"cascade_machine_ids={deleted_ids},cascade_problems={deleted_probs}",
+    )
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=machine_type_deleted", status_code=303)
@@ -1052,7 +1130,9 @@ def admin_delete_machine_id(request: Request, machine_id_row_id: int = Form(...)
     if not row:
         return RedirectResponse("/admin/machines?status=machine_id_not_found", status_code=303)
 
+    item_key = f"{_clean_text(row.machine)} || {_clean_text(row.machine_type)} || {_clean_text(row.machine_id)}"
     db.delete(row)
+    _add_master_audit(db, me.username, "DELETE", "MACHINE_ID", item_key)
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=machine_id_deleted", status_code=303)
@@ -1067,7 +1147,9 @@ def admin_delete_problem(request: Request, problem_id: int = Form(...), db: Sess
     if not row:
         return RedirectResponse("/admin/machines?status=problem_not_found", status_code=303)
 
+    item_key = f"{_clean_text(row.machine)} || {_clean_text(row.machine_type)} || {_clean_text(row.problem)}"
     db.delete(row)
+    _add_master_audit(db, me.username, "DELETE", "PROBLEM", item_key)
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=problem_deleted", status_code=303)
@@ -1087,6 +1169,7 @@ def admin_add_line(request: Request, line_no: str = Form(...), db: Session = Dep
         return RedirectResponse("/admin/machines?status=line_exists", status_code=303)
 
     db.add(MasterLine(line_no=val))
+    _add_master_audit(db, me.username, "ADD", "LINE", val)
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=line_added", status_code=303)
@@ -1106,6 +1189,7 @@ def admin_add_machine(request: Request, machine: str = Form(...), db: Session = 
         return RedirectResponse("/admin/machines?status=machine_exists", status_code=303)
 
     db.add(MasterMachine(machine=machine_val))
+    _add_master_audit(db, me.username, "ADD", "MACHINE", machine_val)
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=machine_added", status_code=303)
@@ -1127,6 +1211,7 @@ def admin_add_machine_type(request: Request,
     m_exists = db.query(MasterMachine).filter(MasterMachine.machine == machine_val).first()
     if not m_exists:
         db.add(MasterMachine(machine=machine_val))
+        _add_master_audit(db, me.username, "ADD", "MACHINE", machine_val, details="auto-created by machine type")
 
     exists = db.query(MasterMachineType).filter(
         MasterMachineType.machine == machine_val,
@@ -1136,6 +1221,7 @@ def admin_add_machine_type(request: Request,
         return RedirectResponse("/admin/machines?status=machine_type_exists", status_code=303)
 
     db.add(MasterMachineType(machine=machine_val, machine_type=machine_type_val))
+    _add_master_audit(db, me.username, "ADD", "MACHINE_TYPE", f"{machine_val} || {machine_type_val}")
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=machine_type_added", status_code=303)
@@ -1159,6 +1245,7 @@ def admin_add_machine_id(request: Request,
     m_exists = db.query(MasterMachine).filter(MasterMachine.machine == machine_val).first()
     if not m_exists:
         db.add(MasterMachine(machine=machine_val))
+        _add_master_audit(db, me.username, "ADD", "MACHINE", machine_val, details="auto-created by machine id")
 
     mt_exists = db.query(MasterMachineType).filter(
         MasterMachineType.machine == machine_val,
@@ -1166,6 +1253,7 @@ def admin_add_machine_id(request: Request,
     ).first()
     if not mt_exists:
         db.add(MasterMachineType(machine=machine_val, machine_type=machine_type_val))
+        _add_master_audit(db, me.username, "ADD", "MACHINE_TYPE", f"{machine_val} || {machine_type_val}", details="auto-created by machine id")
 
     exists = db.query(MasterMachineId).filter(
         MasterMachineId.machine == machine_val,
@@ -1176,6 +1264,7 @@ def admin_add_machine_id(request: Request,
         return RedirectResponse("/admin/machines?status=machine_id_exists", status_code=303)
 
     db.add(MasterMachineId(machine=machine_val, machine_type=machine_type_val, machine_id=machine_id_val))
+    _add_master_audit(db, me.username, "ADD", "MACHINE_ID", f"{machine_val} || {machine_type_val} || {machine_id_val}")
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=machine_id_added", status_code=303)
@@ -1199,6 +1288,7 @@ def admin_add_problem(request: Request,
     m_exists = db.query(MasterMachine).filter(MasterMachine.machine == machine_val).first()
     if not m_exists:
         db.add(MasterMachine(machine=machine_val))
+        _add_master_audit(db, me.username, "ADD", "MACHINE", machine_val, details="auto-created by problem")
 
     if machine_type_val:
         mt_exists = db.query(MasterMachineType).filter(
@@ -1207,6 +1297,7 @@ def admin_add_problem(request: Request,
         ).first()
         if not mt_exists:
             db.add(MasterMachineType(machine=machine_val, machine_type=machine_type_val))
+            _add_master_audit(db, me.username, "ADD", "MACHINE_TYPE", f"{machine_val} || {machine_type_val}", details="auto-created by problem")
 
     q = db.query(MasterProblem).filter(
         MasterProblem.machine == machine_val,
@@ -1221,6 +1312,7 @@ def admin_add_problem(request: Request,
         return RedirectResponse("/admin/machines?status=problem_exists", status_code=303)
 
     db.add(MasterProblem(machine=machine_val, machine_type=machine_type_val, problem=problem_val))
+    _add_master_audit(db, me.username, "ADD", "PROBLEM", f"{machine_val} || {machine_type_val or '-'} || {problem_val}")
     db.commit()
     bump_active_version()
     return RedirectResponse("/admin/machines?status=problem_added", status_code=303)
@@ -1297,7 +1389,7 @@ def create_request(
 @app.post("/tickets/{ticket_id}/action")
 def ticket_action(
     ticket_id: int,
-    action: str = Form(...),                 # doing|hold|done|cancel
+    action: str = Form(...),                 # doing|hold|done|cancel|takeover
     password: str = Form(...),
     who: Optional[str] = Form(None),
     reason: Optional[str] = Form(None),      # hold/cancel
@@ -1324,6 +1416,14 @@ def ticket_action(
         if ticket.current_actor and ticket.current_actor != actor.username:
             raise HTTPException(status_code=409, detail=f"Username ไม่ตรงกับคนปฏิบัติงานอยู่ ({ticket.current_actor})")
 
+    if act == "takeover":
+        if ticket.status not in ("DOING", "HOLD"):
+            raise HTTPException(status_code=409, detail="Takeover ได้เฉพาะสถานะ DOING หรือ HOLD")
+        if ticket.current_actor and ticket.current_actor == actor.username:
+            raise HTTPException(status_code=409, detail="คุณเป็นผู้ปฏิบัติงานคนปัจจุบันอยู่แล้ว")
+
+    if act == "done" and ticket.status == "PENDING":
+        raise HTTPException(status_code=409, detail="ต้องกด Doing ก่อน Done")
     if act == "doing" and ticket.status == "DOING":
         raise HTTPException(status_code=409, detail="ไม่สามารถกด Doing ซ้ำเพื่อเริ่มนับเวลาใหม่ได้")
     if act == "hold" and ticket.status == "HOLD":
@@ -1351,6 +1451,16 @@ def ticket_action(
         ticket.cancel(reason.strip(), by=actor.username)
         ticket.current_actor = None
         ticket.last_action = "cancel"
+    elif act == "takeover":
+        prev_actor = _clean_text(ticket.current_actor) or None
+        db.add(TicketTakeoverLog(
+            ticket_id=ticket.id,
+            from_actor=prev_actor,
+            to_actor=actor.username,
+            status=ticket.status,
+        ))
+        ticket.current_actor = actor.username
+        ticket.last_action = "takeover"
     else:
         raise HTTPException(status_code=400, detail="invalid action")
 
@@ -1458,6 +1568,22 @@ def _apply_history_machine_filters(rows: List[Ticket],
         out.append(row)
     return out
 
+def _build_takeover_logs_map(db: Session, ticket_ids: List[int]) -> Dict[int, List[TicketTakeoverLog]]:
+    out: Dict[int, List[TicketTakeoverLog]] = {}
+    ids = [int(i) for i in ticket_ids if i]
+    if not ids:
+        return out
+
+    rows = (
+        db.query(TicketTakeoverLog)
+        .filter(TicketTakeoverLog.ticket_id.in_(ids))
+        .order_by(TicketTakeoverLog.ticket_id.asc(), TicketTakeoverLog.created_at.asc(), TicketTakeoverLog.id.asc())
+        .all()
+    )
+    for row in rows:
+        out.setdefault(row.ticket_id, []).append(row)
+    return out
+
 @app.get("/history", response_class=HTMLResponse)
 def history(request: Request,
             line_op: Optional[str] = Query(None),
@@ -1486,6 +1612,7 @@ def history(request: Request,
 
     rows = _query_done_or_cancel(db, line_op, None, start_utc, end_utc)
     rows = _apply_history_machine_filters(rows, machine_type_val, machine_brand_val, master["machine_type_map"])
+    takeover_logs_map = _build_takeover_logs_map(db, [t.id for t in rows])
     total_doing = sum((t.doing_secs or 0) for t in rows)
     total_hold  = sum((t.hold_secs  or 0) for t in rows)
     summary = {"doing": _fmt_hms(total_doing), "hold": _fmt_hms(total_hold)}
@@ -1500,6 +1627,7 @@ def history(request: Request,
         "line_op": line_op or "",
         "machine_type": machine_type_val,
         "machine_brand": machine_brand_val,
+        "takeover_logs_map": takeover_logs_map,
         "start_date": start_date or "",
         "end_date": end_date or "",
         "fmt_th": fmt_th,
@@ -1534,6 +1662,7 @@ def export_excel(request: Request,
     master = _build_master_data(db)
     rows = _query_done_or_cancel(db, line_op, None, start_utc, end_utc)
     rows = _apply_history_machine_filters(rows, machine_type_val, machine_brand_val, master["machine_type_map"])
+    takeover_logs_map = _build_takeover_logs_map(db, [t.id for t in rows])
     type_by_key, brand_to_type = _build_history_type_lookup(master["machine_type_map"])
 
     buf = io.BytesIO()
@@ -1541,7 +1670,7 @@ def export_excel(request: Request,
     ws = wb.add_worksheet('History (TH)')
 
     ws.freeze_panes(1, 0)
-    ws.autofilter(0, 0, 0, 18)
+    ws.autofilter(0, 0, 0, 19)
     ws.set_landscape()
     ws.fit_to_pages(1, 0)
 
@@ -1555,7 +1684,7 @@ def export_excel(request: Request,
         "Request by", "Line No.", "Machine", "Machine Type",
         "Machine ID", "Problem", "Description", "Doing", "Hold",
         "Hold Reason", "Waiting Time", "Downtime",
-        "Solution", "Cancel Reason", "Done By",
+        "Solution", "Cancel Reason", "Takeover Log", "Done By",
     ]
     for c, h in enumerate(headers):
         ws.write(0, c, h, hdr)
@@ -1571,6 +1700,11 @@ def export_excel(request: Request,
     r = 1
     for t in rows:
         mtype, brand = _parse_ticket_machine_and_brand(t.equipment, type_by_key, brand_to_type)
+        takeover_logs = takeover_logs_map.get(t.id, [])
+        takeover_text = "\n".join(
+            f"{fmt_th(log.created_at)} | {log.from_actor or '-'} -> {log.to_actor}"
+            for log in takeover_logs
+        ) if takeover_logs else "-"
 
         sum_secs = int((t.closed_at - t.created_at).total_seconds()) if (t.closed_at and t.created_at) else 0
         doing = int(t.doing_secs or 0)
@@ -1595,10 +1729,11 @@ def export_excel(request: Request,
         ws.write(r, 15, hms(sum_secs), center)
         ws.write(r, 16, nz(t.solution), wrap)
         ws.write(r, 17, nz(t.cancel_reason), wrap)
-        ws.write(r, 18, nz(t.done_by or t.canceled_by), cell)
+        ws.write(r, 18, nz(takeover_text), wrap)
+        ws.write(r, 19, nz(t.done_by or t.canceled_by), cell)
         r += 1
 
-    widths = [6, 10, 18, 18, 12, 10, 16, 18, 14, 20, 36, 10, 10, 20, 14, 12, 20, 20, 12]
+    widths = [6, 10, 18, 18, 12, 10, 16, 18, 14, 20, 36, 10, 10, 20, 14, 12, 20, 20, 34, 12]
     for i, w in enumerate(widths):
         ws.set_column(i, i, w)
 

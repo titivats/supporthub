@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
   <meta charset="utf-8">
-  <title>History - Done & Cancelled Tickets</title>
+  <title>History Log</title>
   <style>
     :root{ --bg:#f6f7fb; --card:#ffffff; --line:#e7e7ee; --muted:#6B7280; --thead:#f0f2ff; }
     *{box-sizing:border-box}
@@ -30,6 +30,7 @@
     .done{background:#ecfeff;border-color:#bae6fd;color:#075985}
 
     .wrap-text{max-width:260px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;}
+    .takeover-cell{max-width:260px;white-space:normal;overflow-wrap:anywhere;word-break:break-word;line-height:1.25}
 
     tbody tr{cursor:pointer; transition: background-color .15s ease;}
     tbody tr:hover{background:#f3f6ff;}
@@ -40,7 +41,7 @@
 </head>
 <body>
 <div class="container">
-  <div class="title">Done & Cancelled Tickets</div>
+  <div class="title">History Log</div>
 
   <form id="filterForm" class="filters" method="get" action="/history">
     <label>Line No.
@@ -116,6 +117,7 @@
             <th>Downtime</th>
             <th>Solution</th>
             <th>Cancel Reason</th>
+            <th>Takeover Log</th>
             <th>Done By</th>
           </tr>
         </thead>
@@ -152,9 +154,18 @@
             <td>{{ hms(sum_secs) }}</td>
             <td class="wrap-text">{{ r.solution or '-' }}</td>
             <td class="wrap-text">{{ r.cancel_reason or '-' }}</td>
+            <td class="takeover-cell">
+              {% set logs = takeover_logs_map.get(r.id, []) %}
+              {% if logs %}
+                {% for lg in logs %}<div>{{ fmt_th(lg.created_at) }} | {{ lg.from_actor or '-' }} -> {{ lg.to_actor }}</div>{% endfor %}
+              {% else %}
+                <div>-</div>
+              {% endif %}
+            </td>
             <td>
-              {% if r.status == 'DONE' %}{{ r.done_by or '' }}
-              {% elif r.status == 'CANCELLED' %}{{ r.canceled_by or '' }}
+              {% if r.status == 'DONE' %}{{ r.done_by or '-' }}
+              {% elif r.status == 'CANCELLED' %}{{ r.canceled_by or '-' }}
+              {% else %}-
               {% endif %}
             </td>
           </tr>

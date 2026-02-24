@@ -26,6 +26,7 @@
     .btn.neutral{background:#F3F4F6;border-color:#E5E7EB}
     .btn.danger{background:#FEE2E2;border-color:#FECACA}
     .btn.good{background:#DCFCE7;border-color:#BBF7D0}
+    .btn.takeover{background:#DBEAFE;border-color:#93C5FD;color:#111}
     .btn:disabled{opacity:.5; cursor:not-allowed; box-shadow:none !important}
     .grid{display:grid;grid-template-columns:320px 1fr;gap:18px}
     .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
@@ -211,6 +212,9 @@
                     <div class="row-actions-row">
                       <button type="button" class="btn sm danger" data-id="{{ t.id }}" data-action="cancel" onclick="return doActionFromDataset(this)">Cancel</button>
                       <button type="button" class="btn sm good"   data-id="{{ t.id }}" data-action="done"   onclick="return doActionFromDataset(this)">Done</button>
+                    </div>
+                    <div class="row-actions-row">
+                      <button type="button" class="btn sm takeover" data-id="{{ t.id }}" data-action="takeover" onclick="return doActionFromDataset(this)">Takeover</button>
                     </div>
                   </div>
                 </td>
@@ -712,6 +716,9 @@
     if((action==="doing" && st==="DOING") || (action==="hold" && st==="HOLD")){
       return { blocked: true, message: `ไม่สามารถกด ${st==="DOING"?"Doing":"Hold"} ซ้ำเพื่อเริ่มนับเวลาใหม่ได้` };
     }
+    if(action==="takeover" && !(st==="DOING" || st==="HOLD")){
+      return { blocked: true, message: "Takeover ได้เฉพาะสถานะ DOING หรือ HOLD" };
+    }
     return { blocked: false };
   }
 
@@ -725,6 +732,14 @@
 
     const currentActor = (tr?.dataset.currentActor || "").trim();
     const statusNow = (tr?.dataset.status || "").toUpperCase();
+    if(action === "takeover" && currentActor && currentActor.toLowerCase() === creds.username.toLowerCase()){
+      alert("คุณเป็นผู้ปฏิบัติงานคนปัจจุบันอยู่แล้ว");
+      return false;
+    }
+    if(action === "done" && statusNow === "PENDING"){
+      alert("ต้องกด Doing ก่อน Done");
+      return false;
+    }
     if(action === "done" && statusNow === "DOING" && currentActor && currentActor !== creds.username){
       alert("Username ไม่ตรงกับคนปฏิบัติงานอยู่");
       return false;
@@ -860,15 +875,22 @@
       const btnHold   = tr.querySelector('button.btn.sm[data-action="hold"]');
       const btnCancel = tr.querySelector('button.btn.sm[data-action="cancel"]');
       const btnDone   = tr.querySelector('button.btn.sm[data-action="done"]');
+      const btnTakeover = tr.querySelector('button.btn.sm[data-action="takeover"]');
 
       setDisabled(btnDoing,  false);
       setDisabled(btnHold,   false);
       setDisabled(btnCancel, false);
       setDisabled(btnDone,   false);
+      setDisabled(btnTakeover, false);
 
       if(st==="DOING" || st==="HOLD"){
         if(st==="DOING"){ setDisabled(btnDoing, true, "กำลัง Doing อยู่แล้ว"); }
         if(st==="HOLD"){  setDisabled(btnHold,  true, "กำลัง Hold อยู่แล้ว"); }
+      } else {
+        setDisabled(btnTakeover, true, "Takeover ได้เฉพาะสถานะ DOING หรือ HOLD");
+      }
+      if(st==="PENDING"){
+        setDisabled(btnDone, true, "ต้องกด Doing ก่อน Done");
       }
     });
   }
