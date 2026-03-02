@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Monitoring - SupportHub</title>
+  <style>
+    :root{
+      --bg:#eef2f8;
+      --card:#ffffff;
+      --line:#dbe3ef;
+      --line-strong:#c7d2e3;
+      --text:#0f172a;
+      --muted:#5f6f86;
+      --primary:#2563eb;
+      --primary-strong:#1d4ed8;
+      --good:#16a34a;
+      --warn:#f59e0b;
+      --bad:#ef4444;
+      --shadow:0 10px 28px rgba(15,23,42,.06);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:linear-gradient(180deg,#f4f7fc 0%, var(--bg) 100%);
+      font-family:Segoe UI,Arial,sans-serif;
+      color:var(--text);
+      line-height:1.45;
+    }
+    .container{max-width:1400px;margin:20px auto 30px;padding:0 16px}
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:18px;
+      box-shadow:var(--shadow);
+    }
+    .hero{padding:16px 18px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+    h1{
+      margin:0;
+      font-size:clamp(30px,2.9vw,38px);
+      line-height:1.02;
+      letter-spacing:-.02em;
+    }
+    .desc{margin:6px 0 0;color:var(--muted);font-size:14px}
+    .actions{display:flex;gap:10px;flex-wrap:wrap}
+    .btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      min-height:42px;
+      padding:0 14px;
+      border:1px solid var(--line-strong);
+      border-radius:12px;
+      background:#fff;
+      color:#111827;
+      text-decoration:none;
+      cursor:pointer;
+      font-size:14px;
+      font-weight:500;
+      line-height:1;
+      transition:box-shadow .15s ease, transform .15s ease;
+    }
+    .btn.logout{font-weight:400}
+    .btn.primary{
+      background:var(--primary);
+      color:#fff;
+      border-color:var(--primary);
+      font-weight:600;
+    }
+    .btn.primary:hover{background:var(--primary-strong)}
+    .btn:hover{
+      box-shadow:0 8px 18px rgba(15,23,42,.12);
+      transform:translateY(-1px);
+    }
+
+    .filter-card{margin-top:12px;padding:14px 16px}
+    .filter-title{
+      margin:0 0 12px;
+      color:#1e293b;
+      font-size:14px;
+      font-weight:700;
+      letter-spacing:.01em;
+    }
+    .filters{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(165px,1fr)) minmax(180px,1fr) 28px minmax(180px,1fr) 160px 110px;
+      gap:10px;
+      align-items:end;
+    }
+    .filters label{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      color:#334155;
+      font-size:13px;
+      font-weight:600;
+      line-height:1.1;
+    }
+    .filters select,.filters input{
+      width:100%;
+      height:42px;
+      padding:0 12px;
+      border:1px solid #ced8e6;
+      border-radius:12px;
+      background:#fff;
+      font:inherit;
+      font-size:14px;
+      color:#0f172a;
+    }
+    .filters .btn{
+      height:42px;
+      padding:0 14px;
+      justify-content:center;
+    }
+    .to-sep{
+      height:42px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#475569;
+      font-size:14px;
+      font-weight:600;
+      line-height:1;
+    }
+    .chips{
+      margin-top:10px;
+      padding:10px 12px;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .chip{
+      border:1px solid var(--line);
+      background:#f8fbff;
+      padding:6px 11px;
+      border-radius:999px;
+      color:#334155;
+      font-size:13px;
+      font-weight:500;
+    }
+
+    .layout{margin-top:14px;display:grid;grid-template-columns:minmax(360px,420px) 1fr;gap:14px}
+    .panel{
+      background:#fff;
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:16px;
+      box-shadow:var(--shadow);
+    }
+    .panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .panel h2{margin:0;font-size:34px;line-height:1.08;letter-spacing:-.012em}
+    .section-title{margin-bottom:6px}
+
+    .donut-wrap{display:flex;justify-content:center;align-items:center;padding:8px 0 10px}
+    .donut{
+      --oee: 0;
+      width:238px;
+      height:238px;
+      border-radius:50%;
+      background:conic-gradient(var(--good) calc(var(--oee) * 1%), #e2e8f0 0);
+      display:grid;
+      place-items:center;
+    }
+    .donut.warn{background:conic-gradient(var(--warn) calc(var(--oee) * 1%), #e2e8f0 0)}
+    .donut.bad{background:conic-gradient(var(--bad) calc(var(--oee) * 1%), #e2e8f0 0)}
+    .donut::before{
+      content:"";
+      width:76%;
+      height:76%;
+      border-radius:50%;
+      background:#fff;
+      border:1px solid #e2e8f0;
+      grid-area:1/1;
+    }
+    .donut-text{grid-area:1/1;position:relative;text-align:center}
+    .donut-val{font-size:44px;font-weight:700;line-height:1}
+    .donut-sub{font-size:19px;color:#475569}
+
+    .oee-row{display:flex;justify-content:space-between;color:#475569;font-size:14px;margin-top:6px}
+    .oee-track{height:14px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin:8px 0 6px}
+    .oee-fill{height:100%;background:#16a34a}
+    .oee-fill.warn{background:#f59e0b}
+    .oee-fill.bad{background:#ef4444}
+    .formula{margin-top:6px;color:#334155;font-size:15px;line-height:1.45}
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      padding:7px 13px;
+      border-radius:999px;
+      font-size:13px;
+      font-weight:600;
+      border:1px solid;
+    }
+    .badge.good{background:#dcfce7;border-color:#86efac;color:#166534}
+    .badge.warn{background:#fef3c7;border-color:#fcd34d;color:#92400e}
+
+    .metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+    .metric{
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px 12px;
+      background:#fbfdff;
+    }
+    .metric .k{color:#64748b;font-size:13px;font-weight:600}
+    .metric .v{font-size:clamp(30px,2.2vw,42px);font-weight:700;line-height:1.05}
+    .metric .d{color:#334155;font-size:13px}
+
+    .meta{
+      margin-top:12px;
+      padding-top:10px;
+      border-top:1px solid var(--line);
+      display:grid;
+      grid-template-columns:200px 1fr;
+      row-gap:6px;
+      column-gap:14px;
+    }
+    .meta .k{color:#64748b;font-size:13px}
+    .meta .v{font-weight:600;font-size:14px}
+
+    .empty{
+      margin-top:14px;
+      border:1px dashed #cbd5e1;
+      background:#fff;
+      border-radius:16px;
+      padding:16px;
+      color:#334155;
+      font-size:15px;
+      box-shadow:var(--shadow);
+    }
+
+    @media (max-width:1320px){
+      .layout{grid-template-columns:1fr}
+      .filters{grid-template-columns:repeat(2,minmax(200px,1fr))}
+      .to-sep{display:none}
+    }
+    @media (max-width:900px){
+      h1{font-size:27px}
+      .desc{font-size:14px}
+      .hero{padding:14px}
+      .filters{grid-template-columns:1fr}
+      .metrics-grid{grid-template-columns:1fr}
+      .meta{grid-template-columns:1fr 1fr}
+      .panel h2{font-size:30px}
+      .donut{width:208px;height:208px}
+      .donut-val{font-size:40px}
+      .donut-sub{font-size:17px}
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="hero card">
+    <div class="topbar">
+      <div>
+        <h1>Monitoring</h1>
+        <p class="desc">Metrics are calculated from filtered history tickets (DONE + CANCELLED).</p>
+      </div>
+      <div class="actions">
+        <button class="btn" type="button" onclick="goBack()">Back</button>
+        <a class="btn logout" href="/logout">Logout</a>
+      </div>
+    </div>
+  </div>
+
+  <form class="card filter-card" method="get" action="/monitoring">
+    <p class="filter-title">Filter Criteria</p>
+    <div class="filters">
+      <label>Line No.
+        <select name="line_op">
+          <option value="">All</option>
+          {% for lo in line_ops %}
+            <option value="{{ lo }}" {% if line_op == lo %}selected{% endif %}>{{ lo }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>Machine
+        <select id="machineTypeSelect" name="machine_type">
+          <option value="">All</option>
+          {% for mt in machine_type_map.keys()|list|sort %}
+            <option value="{{ mt }}" {% if machine_type == mt %}selected{% endif %}>{{ mt }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>Machine Type
+        <select id="machineBrandSelect" name="machine_brand" data-selected="{{ machine_brand }}">
+          <option value="">All</option>
+        </select>
+      </label>
+
+      <label>Date
+        <input type="date" name="start_date" value="{{ start_date or '' }}">
+      </label>
+
+      <div class="to-sep">to</div>
+
+      <label>
+        <input type="date" name="end_date" value="{{ end_date or '' }}">
+      </label>
+
+      <button class="btn primary" type="submit" name="apply" value="1">Apply Filter</button>
+      <a class="btn" href="/monitoring">Clear</a>
+    </div>
+  </form>
+
+  <div class="chips card">
+    <span class="chip">Line: {{ line_op or 'All' }}</span>
+    <span class="chip">Machine: {{ machine_type or 'All' }}</span>
+    <span class="chip">Machine Type: {{ machine_brand or 'All' }}</span>
+    <span class="chip">Date: {{ start_date or '-' }} to {{ end_date or '-' }}</span>
+  </div>
+
+  {% if applied and metrics %}
+  {% set tone = 'good' if metrics.is_on_target else ('warn' if metrics.oee_percent >= 50 else 'bad') %}
+  <div class="layout">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>OEE</h2>
+        <span class="badge {{ 'good' if metrics.is_on_target else 'warn' }}">
+          {{ 'Above Target' if metrics.is_on_target else 'Below Target' }}
+        </span>
+      </div>
+
+      <div class="donut-wrap">
+        <div class="donut {{ tone }}" style="--oee: {{ metrics.oee_percent }};">
+          <div class="donut-text">
+            <div class="donut-val">{{ '%.2f'|format(metrics.oee_percent) }}%</div>
+            <div class="donut-sub">OEE</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="oee-row">
+        <span>Target > {{ '%.1f'|format(metrics.target_percent) }}%</span>
+        <span>Current {{ '%.2f'|format(metrics.oee_percent) }}%</span>
+      </div>
+      <div class="oee-track">
+        <div class="oee-fill {{ tone }}" style="width: {{ metrics.oee_percent if metrics.oee_percent <= 100 else 100 }}%;"></div>
+      </div>
+      <div class="formula">
+        Formula used here is availability-based OEE: <strong>Uptime / (Uptime + Downtime)</strong>.
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="section-title">Key Metrics</h2>
+      <div class="metrics-grid">
+        <div class="metric">
+          <div class="k">Downtime</div>
+          <div class="v">{{ metrics.downtime_hms }}</div>
+          <div class="d">Sum of Downtime column from History (all problems, not only Machine Down)</div>
+        </div>
+        <div class="metric">
+          <div class="k">MTTR</div>
+          <div class="v">{{ metrics.mttr_hms }}</div>
+          <div class="d">Total Doing / number of downtime incidents</div>
+        </div>
+        <div class="metric">
+          <div class="k">MTBF</div>
+          <div class="v">{{ metrics.mtbf_hms }}</div>
+          <div class="d">21 hours / number of downtime incidents</div>
+        </div>
+        <div class="metric">
+          <div class="k">Uptime</div>
+          <div class="v">{{ metrics.uptime_hms }}</div>
+          <div class="d">Monitored time - downtime</div>
+        </div>
+      </div>
+
+      <div class="meta">
+        <div class="k">Filtered Tickets</div><div class="v">{{ filtered_count }}</div>
+        <div class="k">DONE / CANCELLED</div><div class="v">{{ metrics.done_count }} / {{ metrics.cancelled_count }}</div>
+        <div class="k">Incidents Used</div><div class="v">{{ metrics.incident_count }}</div>
+        <div class="k">Total Doing</div><div class="v">{{ metrics.total_doing_hms }}</div>
+        <div class="k">Monitored Time</div><div class="v">{{ metrics.monitored_hms }}</div>
+        <div class="k">Start (TH)</div><div class="v">{{ metrics.start_th or '-' }}</div>
+        <div class="k">End (TH)</div><div class="v">{{ metrics.end_th or '-' }}</div>
+      </div>
+    </section>
+  </div>
+  {% else %}
+  <div class="empty">
+    Click <strong>Apply Filter</strong> to show OEE, Downtime, MTTR, and MTBF based on your selected criteria.
+  </div>
+  {% endif %}
+</div>
+
+<script>
+  const machineTypeMap = {{ machine_type_map | tojson }};
+  const typeSelect = document.getElementById("machineTypeSelect");
+  const brandSelect = document.getElementById("machineBrandSelect");
+  const initialBrand = brandSelect?.dataset.selected || "";
+
+  function fillBrands(selectedBrand) {
+    if (!typeSelect || !brandSelect) return;
+    const typeVal = (typeSelect.value || "").trim();
+    const list = typeVal ? (machineTypeMap[typeVal] || []) : [];
+
+    brandSelect.innerHTML = '<option value="">All</option>';
+    list.forEach((brand) => {
+      const opt = document.createElement("option");
+      opt.value = brand;
+      opt.textContent = brand;
+      if ((selectedBrand || "") === brand) opt.selected = true;
+      brandSelect.appendChild(opt);
+    });
+
+    if (selectedBrand && !list.includes(selectedBrand)) {
+      const extra = document.createElement("option");
+      extra.value = selectedBrand;
+      extra.textContent = selectedBrand;
+      extra.selected = true;
+      brandSelect.appendChild(extra);
+    }
+  }
+
+  fillBrands(initialBrand);
+  if (typeSelect) {
+    typeSelect.addEventListener("change", () => fillBrands(""));
+  }
+
+  function goBack(){
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.href = "/";
+    }
+  }
+</script>
+</body>
+</html>
+

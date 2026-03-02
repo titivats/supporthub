@@ -6,3 +6,4 @@ itsdangerous
 requests
 python-multipart
 xlsxwriter
+paho-mqtt

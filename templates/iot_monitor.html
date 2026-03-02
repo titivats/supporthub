@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>IoT Monitor - SupportHub</title>
+  <style>
+    :root{
+      --bg:#f6f7fb;
+      --card:#ffffff;
+      --line:#e7e7ee;
+      --muted:#6b7280;
+      --ok-bg:#dcfce7;
+      --ok-fg:#166534;
+      --warn-bg:#fef3c7;
+      --warn-fg:#92400e;
+      --err-bg:#fee2e2;
+      --err-fg:#991b1b;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:#111827;
+      font-family:Segoe UI,Arial,sans-serif;
+    }
+    .container{max-width:1400px;margin:22px auto;padding:0 16px}
+    .topbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:14px;
+      margin-bottom:14px;
+      flex-wrap:wrap;
+    }
+    h1{margin:0 0 4px;font-size:34px;line-height:1.08}
+    .lead{margin:0;color:var(--muted);font-size:14px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .btn, a.btn{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      min-height:42px;
+      padding:0 14px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:#fff;
+      color:#111827;
+      text-decoration:none;
+      cursor:pointer;
+      font-size:14px;
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:14px;
+      margin-bottom:12px;
+    }
+    .status-top{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .status-left{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      border-radius:999px;
+      border:1px solid var(--line);
+      padding:5px 10px;
+      font-size:12px;
+      font-weight:600;
+    }
+    .badge.ok{
+      background:var(--ok-bg);
+      border-color:#86efac;
+      color:var(--ok-fg);
+    }
+    .badge.warn{
+      background:var(--warn-bg);
+      border-color:#fcd34d;
+      color:var(--warn-fg);
+    }
+    .badge.err{
+      background:var(--err-bg);
+      border-color:#fca5a5;
+      color:var(--err-fg);
+    }
+    .muted{color:var(--muted)}
+    .status-meta{
+      display:grid;
+      grid-template-columns:repeat(4, minmax(0, 1fr));
+      gap:8px;
+    }
+    .meta-item{
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:10px;
+      background:#fff;
+    }
+    .meta-item .k{
+      color:var(--muted);
+      font-size:12px;
+      margin-bottom:4px;
+    }
+    .meta-item .v{
+      font-weight:600;
+      font-size:14px;
+      overflow-wrap:anywhere;
+    }
+    .error-box{
+      margin-top:10px;
+      border:1px solid #fca5a5;
+      background:var(--err-bg);
+      color:var(--err-fg);
+      border-radius:10px;
+      padding:10px;
+      font-size:13px;
+      display:none;
+    }
+    .card-head{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .card-head h2{
+      margin:0;
+      font-size:34px;
+      line-height:1.08;
+    }
+    .summary-grid{
+      display:grid;
+      grid-template-columns:repeat(5, minmax(0, 1fr));
+      gap:8px;
+    }
+    .summary-item{
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:#fff;
+      padding:10px;
+    }
+    .summary-item .k{
+      color:var(--muted);
+      font-size:12px;
+      margin-bottom:6px;
+      text-transform:uppercase;
+      letter-spacing:.3px;
+    }
+    .summary-item .v{
+      font-size:28px;
+      font-weight:700;
+      line-height:1;
+    }
+    .summary-item .u{
+      margin-left:6px;
+      font-size:12px;
+      color:var(--muted);
+      font-weight:600;
+    }
+    .charts-grid{
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0, 1fr));
+      gap:10px;
+    }
+    .chart-item{
+      border:1px solid var(--line);
+      border-radius:10px;
+      padding:10px;
+      background:#fff;
+    }
+    .chart-title{
+      display:flex;
+      justify-content:space-between;
+      align-items:baseline;
+      gap:8px;
+      margin-bottom:8px;
+    }
+    .chart-title strong{
+      font-size:15px;
+    }
+    .chart-range{
+      color:var(--muted);
+      font-size:12px;
+    }
+    .chart-svg{
+      width:100%;
+      height:140px;
+      display:block;
+      border:1px solid #eef2ff;
+      border-radius:8px;
+      background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    }
+    .raw{
+      margin:0;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:#0f172a;
+      color:#e2e8f0;
+      padding:12px;
+      min-height:70px;
+      white-space:pre-wrap;
+      word-break:break-word;
+      font-size:12px;
+      line-height:1.45;
+    }
+    .empty{
+      border:1px dashed #cbd5e1;
+      border-radius:10px;
+      padding:12px;
+      color:#475569;
+      font-size:14px;
+      background:#fff;
+    }
+    @media (max-width:1080px){
+      .status-meta{grid-template-columns:repeat(2, minmax(0, 1fr))}
+      .summary-grid{grid-template-columns:repeat(2, minmax(0, 1fr))}
+      .charts-grid{grid-template-columns:1fr}
+    }
+    @media (max-width:720px){
+      h1{font-size:28px}
+      .card-head h2{font-size:28px}
+      .summary-grid{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="topbar">
+    <div>
+      <h1>IoT Monitor</h1>
+      <p class="lead">Live MQTT telemetry from topic <strong id="topicText">power/pzem</strong></p>
+    </div>
+    <div class="actions">
+      <button class="btn" type="button" onclick="goBack()">Back</button>
+      <a class="btn" href="/logout">Logout</a>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="status-top">
+      <div class="status-left">
+        <span id="connBadge" class="badge warn">Disconnected</span>
+        <span class="muted" id="lastMsgText">Last message: -</span>
+      </div>
+      <div class="muted">Auto refresh every 2 seconds</div>
+    </div>
+    <div class="status-meta">
+      <div class="meta-item">
+        <div class="k">Broker</div>
+        <div class="v" id="brokerText">-</div>
+      </div>
+      <div class="meta-item">
+        <div class="k">Topic</div>
+        <div class="v" id="topicMetaText">-</div>
+      </div>
+      <div class="meta-item">
+        <div class="k">MQTT Client</div>
+        <div class="v" id="clientText">-</div>
+      </div>
+      <div class="meta-item">
+        <div class="k">Messages / Parse Error</div>
+        <div class="v" id="countText">0 / 0</div>
+      </div>
+    </div>
+    <div id="errBox" class="error-box"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Latest Values</h2>
+    </div>
+    <div id="summaryGrid" class="summary-grid"></div>
+    <div id="summaryEmpty" class="empty">Waiting for numeric MQTT payload from the configured topic.</div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Trend Charts</h2>
+      <div class="muted" id="sampleText">Samples: 0</div>
+    </div>
+    <div id="chartsGrid" class="charts-grid"></div>
+    <div id="chartsEmpty" class="empty">No chart data yet.</div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Last Payload</h2></div>
+    <pre id="payloadText" class="raw">-</pre>
+  </section>
+</div>
+
+<script>
+  const labels = {
+    voltage: "Voltage",
+    current: "Current",
+    power: "Power",
+    energy: "Energy",
+    frequency: "Pzem3 Freq",
+    pf: "Power Factor",
+    value: "Value"
+  };
+
+  function goBack(){
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.href = "/";
+    }
+  }
+
+  function formatNumber(v){
+    const n = Number(v);
+    if (Number.isNaN(n)) return "-";
+    if (Math.abs(n) >= 1000) return n.toFixed(1);
+    if (Math.abs(n) >= 100) return n.toFixed(2);
+    return n.toFixed(3);
+  }
+
+  function prettyKey(k){
+    const low = String(k || "").toLowerCase();
+    if (labels[low]) return labels[low];
+    if (low.includes("freq")) return "Pzem3 Freq";
+    return String(k || "").replace(/[_.]/g, " ");
+  }
+
+  function renderSummary(values){
+    const grid = document.getElementById("summaryGrid");
+    const empty = document.getElementById("summaryEmpty");
+    const keys = Object.keys(values || {});
+    grid.innerHTML = "";
+    if (!keys.length){
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+
+    keys.slice(0, 10).forEach((key) => {
+      const div = document.createElement("div");
+      div.className = "summary-item";
+      div.innerHTML = `<div class="k">${prettyKey(key)}</div><div class="v">${formatNumber(values[key])}</div>`;
+      grid.appendChild(div);
+    });
+  }
+
+  function buildPath(points, width, height){
+    if (!points.length) return "";
+    const min = Math.min(...points.map(p => p.value));
+    const max = Math.max(...points.map(p => p.value));
+    const span = Math.max(max - min, 1e-9);
+    return points.map((p, i) => {
+      const x = (i / Math.max(points.length - 1, 1)) * width;
+      const y = height - ((p.value - min) / span) * height;
+      return `${x.toFixed(2)},${y.toFixed(2)}`;
+    }).join(" ");
+  }
+
+  function renderCharts(trend, samples){
+    const grid = document.getElementById("chartsGrid");
+    const empty = document.getElementById("chartsEmpty");
+    document.getElementById("sampleText").textContent = `Samples: ${samples || 0}`;
+    const keys = Object.keys(trend || {}).filter(k => (trend[k] || []).length > 1);
+    grid.innerHTML = "";
+    if (!keys.length){
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+
+    keys.slice(0, 6).forEach((key) => {
+      const points = trend[key] || [];
+      const w = 620;
+      const h = 140;
+      const poly = buildPath(points, w, h);
+      const firstTs = points[0]?.ts || "-";
+      const lastTs = points[points.length - 1]?.ts || "-";
+
+      const item = document.createElement("div");
+      item.className = "chart-item";
+      item.innerHTML = `
+        <div class="chart-title">
+          <strong>${prettyKey(key)}</strong>
+          <span class="chart-range">${firstTs} -> ${lastTs}</span>
+        </div>
+        <svg viewBox="0 0 ${w} ${h}" class="chart-svg" preserveAspectRatio="none" aria-label="${key}">
+          <polyline points="${poly}" fill="none" stroke="#2563eb" stroke-width="2"></polyline>
+        </svg>
+      `;
+      grid.appendChild(item);
+    });
+  }
+
+  function setStatusBadge(connected, hasError){
+    const badge = document.getElementById("connBadge");
+    badge.classList.remove("ok", "warn", "err");
+    if (connected){
+      badge.classList.add("ok");
+      badge.textContent = "Connected";
+      return;
+    }
+    if (hasError){
+      badge.classList.add("err");
+      badge.textContent = "API Error";
+      return;
+    }
+    badge.classList.add("warn");
+    badge.textContent = "Disconnected";
+  }
+
+  async function loadStatus(){
+    const errBox = document.getElementById("errBox");
+    try{
+      const res = await fetch("/api/iot-monitor/status", { cache: "no-store" });
+      if (!res.ok){
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setStatusBadge(!!data.connected, false);
+
+      document.getElementById("brokerText").textContent = data.broker || "-";
+      document.getElementById("topicText").textContent = data.topic || "-";
+      document.getElementById("topicMetaText").textContent = data.topic || "-";
+      document.getElementById("clientText").textContent = data.client_id || "-";
+      document.getElementById("countText").textContent = `${data.message_count || 0} / ${data.parse_error_count || 0}`;
+      document.getElementById("lastMsgText").textContent = `Last message: ${data.last_message_at || "-"}`;
+      document.getElementById("payloadText").textContent = data.last_payload || "-";
+
+      const errText = data.last_error || "";
+      if (errText){
+        errBox.style.display = "block";
+        errBox.textContent = errText;
+      } else {
+        errBox.style.display = "none";
+        errBox.textContent = "";
+      }
+
+      renderSummary(data.latest_values || {});
+      renderCharts(data.trend || {}, data.samples || 0);
+    } catch (err){
+      setStatusBadge(false, true);
+      errBox.style.display = "block";
+      errBox.textContent = `Unable to load IoT monitor API: ${err}`;
+    }
+  }
+
+  loadStatus();
+  setInterval(loadStatus, 2000);
+</script>
+</body>
+</html>
+

@@ -13,9 +13,21 @@ from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from itsdangerous import TimestampSigner, BadSignature
 import requests
 
+from iot_monitor_service import iot_monitor
+
 app = FastAPI(title="SupportHub")
 from fastapi.templating import Jinja2Templates
 templates = Jinja2Templates(directory="templates")
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    iot_monitor.start()
+
+
+@app.on_event("shutdown")
+def on_shutdown() -> None:
+    iot_monitor.stop()
 
 # ---------- Database (SQLite) ----------
 DATABASE_URL = "sqlite:///E:/Data/Web/supporthub/supporthub.db"  # ใช้พาธเต็ม กัน DB หลุดไป System32
@@ -1751,3 +1763,156 @@ def export_excel(request: Request,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+
+
+def _parse_th_date_range(start_date: Optional[str], end_date: Optional[str]) -> tuple[Optional[datetime], Optional[datetime]]:
+    start_utc = None
+    end_utc = None
+    if start_date:
+        start_utc = datetime.combine(datetime.strptime(start_date, "%Y-%m-%d").date(), time.min) - TH_OFFSET
+    if end_date:
+        end_utc = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d").date(), time.max) - TH_OFFSET
+    if start_utc and not end_utc:
+        end_utc = datetime.combine((start_utc + TH_OFFSET).date(), time.max) - TH_OFFSET
+    if end_utc and not start_utc:
+        start_utc = datetime.combine((end_utc + TH_OFFSET).date(), time.min) - TH_OFFSET
+    return start_utc, end_utc
+
+
+def _build_monitoring_metrics(rows: List[Ticket], start_utc: Optional[datetime], end_utc: Optional[datetime]) -> Dict[str, object]:
+    downtime_secs = 0
+    total_doing_secs = 0
+    done_count = 0
+    cancelled_count = 0
+    incident_count = 0
+
+    for row in rows:
+        if row.status == "DONE":
+            done_count += 1
+        elif row.status == "CANCELLED":
+            cancelled_count += 1
+
+        total_doing_secs += int(row.doing_secs or 0)
+
+        if row.created_at and row.closed_at:
+            d = int((row.closed_at - row.created_at).total_seconds())
+            if d > 0:
+                downtime_secs += d
+                incident_count += 1
+
+    monitored_start = start_utc
+    monitored_end = end_utc
+    if not (monitored_start and monitored_end):
+        points_start = [r.created_at for r in rows if r.created_at]
+        points_end = [(r.closed_at or r.created_at) for r in rows if r.created_at]
+        if points_start and points_end:
+            monitored_start = min(points_start)
+            monitored_end = max(points_end)
+        else:
+            now_th = datetime.utcnow() + TH_OFFSET
+            local_start = datetime.combine(now_th.date(), time.min)
+            local_end = datetime.combine(now_th.date(), time.max)
+            monitored_start = local_start - TH_OFFSET
+            monitored_end = local_end - TH_OFFSET
+
+    monitored_secs = 0
+    if monitored_start and monitored_end:
+        monitored_secs = max(int((monitored_end - monitored_start).total_seconds()), 0)
+    monitored_secs = max(monitored_secs, downtime_secs)
+
+    uptime_secs = max(monitored_secs - downtime_secs, 0)
+    mttr_secs = int(total_doing_secs / incident_count) if incident_count > 0 else 0
+    mtbf_secs = int((21 * 3600) / incident_count) if incident_count > 0 else 0
+
+    denominator = uptime_secs + downtime_secs
+    oee_percent = (uptime_secs * 100.0 / denominator) if denominator > 0 else 0.0
+    target_percent = 85.0
+
+    return {
+        "downtime_secs": downtime_secs,
+        "downtime_hms": _fmt_hms(downtime_secs),
+        "total_doing_hms": _fmt_hms(total_doing_secs),
+        "incident_count": incident_count,
+        "mttr_hms": _fmt_hms(mttr_secs),
+        "mtbf_hms": _fmt_hms(mtbf_secs),
+        "uptime_hms": _fmt_hms(uptime_secs),
+        "monitored_hms": _fmt_hms(monitored_secs),
+        "oee_percent": round(oee_percent, 2),
+        "target_percent": target_percent,
+        "is_on_target": oee_percent >= target_percent,
+        "done_count": done_count,
+        "cancelled_count": cancelled_count,
+        "start_th": fmt_th(monitored_start),
+        "end_th": fmt_th(monitored_end),
+    }
+
+
+@app.get("/monitoring", response_class=HTMLResponse)
+def monitoring(
+    request: Request,
+    line_op: Optional[str] = Query(None),
+    machine_type: Optional[str] = Query(None),
+    machine_brand: Optional[str] = Query(None),
+    equipment: Optional[str] = Query(None),  # backward-compatible query param
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    apply: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    try:
+        user = get_current_user(request, db)
+    except HTTPException:
+        return RedirectResponse("/login", status_code=302)
+
+    master = _build_master_data(db)
+    machine_type_val, machine_brand_val = _normalize_history_filters(machine_type, machine_brand, equipment)
+    applied = (apply or "").strip() == "1"
+
+    rows: List[Ticket] = []
+    metrics = None
+    filtered_count = 0
+
+    start_utc = end_utc = None
+    try:
+        start_utc, end_utc = _parse_th_date_range(start_date, end_date)
+    except Exception:
+        start_utc = end_utc = None
+
+    if applied:
+        rows = _query_done_or_cancel(db, line_op, None, start_utc, end_utc)
+        rows = _apply_history_machine_filters(rows, machine_type_val, machine_brand_val, master["machine_type_map"])
+        filtered_count = len(rows)
+        metrics = _build_monitoring_metrics(rows, start_utc, end_utc)
+
+    return templates.TemplateResponse("monitoring.html", {
+        "request": request,
+        "user": user,
+        "line_ops": master["line_ops"],
+        "machine_type_map": master["machine_type_map"],
+        "line_op": line_op or "",
+        "machine_type": machine_type_val,
+        "machine_brand": machine_brand_val,
+        "start_date": start_date or "",
+        "end_date": end_date or "",
+        "applied": applied,
+        "metrics": metrics,
+        "filtered_count": filtered_count,
+    })
+
+
+@app.get("/iot-monitor", response_class=HTMLResponse)
+def iot_monitor_page(request: Request, db: Session = Depends(get_db)):
+    try:
+        user = get_current_user(request, db)
+    except HTTPException:
+        return RedirectResponse("/login", status_code=302)
+    return templates.TemplateResponse("iot_monitor.html", {
+        "request": request,
+        "user": user,
+    })
+
+
+@app.get("/api/iot-monitor/status")
+def api_iot_monitor_status(request: Request, db: Session = Depends(get_db)):
+    _ = get_current_user(request, db)
+    return iot_monitor.snapshot()

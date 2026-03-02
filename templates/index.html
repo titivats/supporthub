@@ -87,8 +87,9 @@
         <a class="btn" href="/admin/machines">Add Machine</a>
         <a class="btn" href="/admin/users">Manage Users</a>
       {% endif %}
-      <a class="btn" href="/history">View History</a>
-      <button class="btn" type="button" onclick="goBack()">Back</button>
+      <a class="btn" href="/history">History Log</a>
+      <a class="btn" href="/monitoring">Monitoring</a>
+      <a class="btn" href="/iot-monitor">IoT Monitor</a>
       <a class="btn" href="/logout">Logout</a>
     </div>
   </div>
@@ -955,14 +956,6 @@
   });
 })();
 
-// Back button helper
-function goBack(){
-  if (window.history.length > 1) {
-    window.history.back();
-  } else {
-    window.location.href = "/";
-  }
-}
 </script>
 
 <!-- Smart-reload: เช็คเวอร์ชันทุก 2 วินาที แล้วรีโหลดเมื่อมีการเปลี่ยนแปลง -->
