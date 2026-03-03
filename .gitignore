@@ -12,6 +12,7 @@ logs/
 wheels/
 
 *.log
+127.0.0.1
 
 *.db
 *.db-wal

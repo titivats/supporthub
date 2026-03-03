@@ -21,7 +21,8 @@
       margin:0;
       background:var(--bg);
       color:#111827;
-      font-family:Segoe UI,Arial,sans-serif;
+      font-family:system-ui, Segoe UI, Arial;
+      line-height:1.35;
     }
     .container{max-width:1400px;margin:22px auto;padding:0 16px}
     .topbar{
@@ -32,8 +33,8 @@
       margin-bottom:14px;
       flex-wrap:wrap;
     }
-    h1{margin:0 0 4px;font-size:34px;line-height:1.08}
-    .lead{margin:0;color:var(--muted);font-size:14px}
+    h1{margin:0 0 4px;font-size:28px;line-height:1.15}
+    .lead{margin:0;color:var(--muted);font-size:13px}
     .actions{display:flex;gap:8px;flex-wrap:wrap}
     .btn, a.btn{
       display:inline-flex;
@@ -136,8 +137,8 @@
     }
     .card-head h2{
       margin:0;
-      font-size:34px;
-      line-height:1.08;
+      font-size:24px;
+      line-height:1.15;
     }
     .summary-grid{
       display:grid;
@@ -158,7 +159,7 @@
       letter-spacing:.3px;
     }
     .summary-item .v{
-      font-size:28px;
+      font-size:24px;
       font-weight:700;
       line-height:1;
     }
@@ -187,7 +188,7 @@
       margin-bottom:8px;
     }
     .chart-title strong{
-      font-size:15px;
+      font-size:14px;
     }
     .chart-range{
       color:var(--muted);
@@ -219,7 +220,7 @@
       border-radius:10px;
       padding:12px;
       color:#475569;
-      font-size:14px;
+      font-size:13px;
       background:#fff;
     }
     @media (max-width:1080px){
@@ -228,8 +229,8 @@
       .charts-grid{grid-template-columns:1fr}
     }
     @media (max-width:720px){
-      h1{font-size:28px}
-      .card-head h2{font-size:28px}
+      h1{font-size:24px}
+      .card-head h2{font-size:22px}
       .summary-grid{grid-template-columns:1fr}
     }
   </style>

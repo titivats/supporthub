@@ -4,12 +4,13 @@
 #
 # Usage:
 #   cd C:\supporthub
-#   venv\Scripts\python reset_admin_flexible.py
+#   venv\Scripts\python python\scripts\reset_admin_flexible.py
 # or:
-#   python reset_admin_flexible.py
+#   python python\scripts\reset_admin_flexible.py
 import os, sqlite3, hashlib, sys
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "supporthub.db")
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+DB_PATH = os.path.join(BASE_DIR, "database", "supporthub.db")
 USERNAME = "ADMIN"
 PASSWORD_PLAIN = "259487123"
 PASSWORD_HASH  = hashlib.sha256(PASSWORD_PLAIN.encode("utf-8")).hexdigest()
@@ -89,7 +90,7 @@ if admin_id:
         if plain_col in cols_lower:
             true_name = cols[cols_lower.index(plain_col)]
             cur.execute(f"UPDATE users SET {true_name}=? WHERE rowid=?", (PASSWORD_PLAIN, admin_id))
-    print(f"Updated ADMIN → {user_col}='{USERNAME}', {pw_col}=<sha256>, role='Admin'")
+    print(f"Updated ADMIN -> {user_col}='{USERNAME}', {pw_col}=<sha256>, role='Admin'")
 else:
     # Build insert column list based on what exists
     insert_cols = [user_col, pw_col]
@@ -109,6 +110,6 @@ con.commit()
 # Print final state for verification
 cur.execute(f"SELECT {user_col} as user, {pw_col} as pwcol, {role_col} as role FROM users WHERE UPPER({user_col})=?", (USERNAME.upper(),))
 print("Row:", dict(cur.fetchone()))
-print("OK → Username=ADMIN  Password=259487123  (stored sha256 in column:", pw_col, ")")
+print("OK -> Username=ADMIN  Password=259487123  (stored sha256 in column:", pw_col, ")")
 
 con.close()

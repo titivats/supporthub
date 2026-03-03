@@ -3,7 +3,7 @@ setlocal ENABLEDELAYEDEXPANSION
 
 rem =====================================================================
 rem  start_supporthub.bat  (OFFLINE / WHEELS-ONLY / STICKY CONSOLE)
-rem    - Installs strictly from local wheels: E:\Data\Web\supporthub\wheels\wheels
+rem    - Installs strictly from local wheels: E:\Data\Web\supporthub\wheels
 rem    - Creates/activates venv
 rem    - Runs Uvicorn in foreground
 rem    - Always PAUSE at the end (window won't auto-close)
@@ -12,7 +12,7 @@ rem =====================================================================
 
 set "PROJ=E:\Data\Web\supporthub"
 set "REQ=%PROJ%\requirements.txt"
-set "WHEELS=E:\Data\Web\supporthub\wheels\wheels"
+set "WHEELS=E:\Data\Web\supporthub\wheels"
 set "VENV=%PROJ%\venv"
 set "HOST=127.0.0.1"
 set "PORT=8888"
@@ -81,16 +81,16 @@ if errorlevel 1 (
   echo [WARN] pip install returned non-zero. >> "%LOGFILE%"
 )
 
-if not exist "%PROJ%\server_app.py" (
-  echo [ERROR] server_app.py not found in %PROJ%
-  echo [ERROR] server_app.py not found in %PROJ% >> "%LOGFILE%"
+if not exist "%PROJ%\python\server_app.py" (
+  echo [ERROR] python\server_app.py not found in %PROJ%
+  echo [ERROR] python\server_app.py not found in %PROJ% >> "%LOGFILE%"
   goto :END
 )
 
 echo.
 echo [RUN] Uvicorn starting at http://%HOST%:%PORT% ...
-echo [RUN] uvicorn server_app:app --host %HOST% --port %PORT% >> "%LOGFILE%"
-python -m uvicorn server_app:app --host %HOST% --port %PORT% >> "%LOGFILE%" 2>&1
+echo [RUN] uvicorn python.server_app:app --host %HOST% --port %PORT% >> "%LOGFILE%"
+python -m uvicorn python.server_app:app --host %HOST% --port %PORT% >> "%LOGFILE%" 2>&1
 set "RC=%ERRORLEVEL%"
 echo [INFO] Uvicorn exited with code %RC% >> "%LOGFILE%"
 

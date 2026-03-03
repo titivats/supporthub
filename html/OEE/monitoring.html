@@ -22,9 +22,9 @@
     body{
       margin:0;
       background:linear-gradient(180deg,#f4f7fc 0%, var(--bg) 100%);
-      font-family:Segoe UI,Arial,sans-serif;
+      font-family:system-ui, Segoe UI, Arial;
       color:var(--text);
-      line-height:1.45;
+      line-height:1.35;
     }
     .container{max-width:1400px;margin:20px auto 30px;padding:0 16px}
     .card{
@@ -37,11 +37,11 @@
     .topbar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
     h1{
       margin:0;
-      font-size:clamp(30px,2.9vw,38px);
-      line-height:1.02;
-      letter-spacing:-.02em;
+      font-size:28px;
+      line-height:1.15;
+      letter-spacing:0;
     }
-    .desc{margin:6px 0 0;color:var(--muted);font-size:14px}
+    .desc{margin:6px 0 0;color:var(--muted);font-size:13px}
     .actions{display:flex;gap:10px;flex-wrap:wrap}
     .btn{
       display:inline-flex;
@@ -78,7 +78,7 @@
     .filter-title{
       margin:0 0 12px;
       color:#1e293b;
-      font-size:14px;
+      font-size:13px;
       font-weight:700;
       letter-spacing:.01em;
     }
@@ -93,7 +93,7 @@
       flex-direction:column;
       gap:6px;
       color:#334155;
-      font-size:13px;
+      font-size:12px;
       font-weight:600;
       line-height:1.1;
     }
@@ -136,7 +136,7 @@
       padding:6px 11px;
       border-radius:999px;
       color:#334155;
-      font-size:13px;
+      font-size:12px;
       font-weight:500;
     }
 
@@ -149,7 +149,7 @@
       box-shadow:var(--shadow);
     }
     .panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
-    .panel h2{margin:0;font-size:34px;line-height:1.08;letter-spacing:-.012em}
+    .panel h2{margin:0;font-size:24px;line-height:1.15;letter-spacing:0}
     .section-title{margin-bottom:6px}
 
     .donut-wrap{display:flex;justify-content:center;align-items:center;padding:8px 0 10px}
@@ -175,21 +175,21 @@
     }
     .donut-text{grid-area:1/1;position:relative;text-align:center}
     .donut-val{font-size:44px;font-weight:700;line-height:1}
-    .donut-sub{font-size:19px;color:#475569}
+    .donut-sub{font-size:17px;color:#475569}
 
     .oee-row{display:flex;justify-content:space-between;color:#475569;font-size:14px;margin-top:6px}
     .oee-track{height:14px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin:8px 0 6px}
     .oee-fill{height:100%;background:#16a34a}
     .oee-fill.warn{background:#f59e0b}
     .oee-fill.bad{background:#ef4444}
-    .formula{margin-top:6px;color:#334155;font-size:15px;line-height:1.45}
+    .formula{margin-top:6px;color:#334155;font-size:14px;line-height:1.35}
 
     .badge{
       display:inline-flex;
       align-items:center;
       padding:7px 13px;
       border-radius:999px;
-      font-size:13px;
+      font-size:12px;
       font-weight:600;
       border:1px solid;
     }
@@ -203,9 +203,9 @@
       padding:10px 12px;
       background:#fbfdff;
     }
-    .metric .k{color:#64748b;font-size:13px;font-weight:600}
+    .metric .k{color:#64748b;font-size:12px;font-weight:600}
     .metric .v{font-size:clamp(30px,2.2vw,42px);font-weight:700;line-height:1.05}
-    .metric .d{color:#334155;font-size:13px}
+    .metric .d{color:#334155;font-size:12px}
 
     .meta{
       margin-top:12px;
@@ -216,7 +216,7 @@
       row-gap:6px;
       column-gap:14px;
     }
-    .meta .k{color:#64748b;font-size:13px}
+    .meta .k{color:#64748b;font-size:12px}
     .meta .v{font-weight:600;font-size:14px}
 
     .empty{
@@ -226,7 +226,7 @@
       border-radius:16px;
       padding:16px;
       color:#334155;
-      font-size:15px;
+      font-size:14px;
       box-shadow:var(--shadow);
     }
 
@@ -236,16 +236,16 @@
       .to-sep{display:none}
     }
     @media (max-width:900px){
-      h1{font-size:27px}
-      .desc{font-size:14px}
+      h1{font-size:24px}
+      .desc{font-size:13px}
       .hero{padding:14px}
       .filters{grid-template-columns:1fr}
       .metrics-grid{grid-template-columns:1fr}
       .meta{grid-template-columns:1fr 1fr}
-      .panel h2{font-size:30px}
+      .panel h2{font-size:22px}
       .donut{width:208px;height:208px}
       .donut-val{font-size:40px}
-      .donut-sub{font-size:17px}
+      .donut-sub{font-size:16px}
     }
   </style>
 </head>
