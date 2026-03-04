@@ -51,7 +51,15 @@ def register_web_routes(app, templates, deps):
     def do_login(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
         user = db.query(User).filter(User.username == username.strip()).first()
         if not user or not verify_password(password, user.password_hash):
-            return templates.TemplateResponse("login.html", {"request": request, "error": "à¸Šà¸·à¹ˆà¸­à¸œà¸¹à¹‰à¹ƒà¸Šà¹‰à¸«à¸£à¸·à¸­à¸£à¸«à¸±à¸ªà¸œà¹ˆà¸²à¸™à¹„à¸¡à¹ˆà¸–à¸¹à¸à¸•à¹‰à¸­à¸‡", "created": False}, status_code=400)
+            return templates.TemplateResponse(
+                "login.html",
+                {
+                    "request": request,
+                    "error": "\u0e0a\u0e37\u0e48\u0e2d\u0e1c\u0e39\u0e49\u0e43\u0e0a\u0e49\u0e2b\u0e23\u0e37\u0e2d\u0e23\u0e2b\u0e31\u0e2a\u0e1c\u0e48\u0e32\u0e19\u0e44\u0e21\u0e48\u0e16\u0e39\u0e01\u0e15\u0e49\u0e2d\u0e07",
+                    "created": False,
+                },
+                status_code=400,
+            )
         token = make_session_token(user.username)
         resp = RedirectResponse("/", status_code=303)
         resp.set_cookie("session", token, httponly=True, samesite="lax", secure=SECURE_COOKIES, max_age=SESSION_AGE)
@@ -924,6 +932,8 @@ def register_web_routes(app, templates, deps):
                 line_op: Optional[str] = Query(None),
                 machine_type: Optional[str] = Query(None),
                 machine_brand: Optional[str] = Query(None),
+                machine_id: Optional[str] = Query(None),
+                problem: Optional[str] = Query(None),
                 equipment: Optional[str] = Query(None),  # backward-compatible query param
                 start_date: Optional[str] = Query(None),
                 end_date: Optional[str] = Query(None),
@@ -944,9 +954,17 @@ def register_web_routes(app, templates, deps):
     
         master = _build_master_data(db)
         machine_type_val, machine_brand_val = _normalize_history_filters(machine_type, machine_brand, equipment)
+        machine_id_val = (machine_id or "").strip()
+        problem_val = (problem or "").strip()
     
         rows = _query_done_or_cancel(db, line_op, None, start_utc, end_utc)
         rows = _apply_history_machine_filters(rows, machine_type_val, machine_brand_val, master["machine_type_map"])
+        machine_id_options = sorted({(t.machine_id or "").strip() for t in rows if (t.machine_id or "").strip()}, key=lambda s: s.lower())
+        problem_options = sorted({(t.problem or "").strip() for t in rows if (t.problem or "").strip()}, key=lambda s: s.lower())
+        if machine_id_val:
+            rows = [t for t in rows if ((t.machine_id or "").strip().lower() == machine_id_val.lower())]
+        if problem_val:
+            rows = [t for t in rows if ((t.problem or "").strip().lower() == problem_val.lower())]
         takeover_logs_map = _build_takeover_logs_map(db, [t.id for t in rows])
         total_doing = sum((t.doing_secs or 0) for t in rows)
         total_hold  = sum((t.hold_secs  or 0) for t in rows)
@@ -962,6 +980,10 @@ def register_web_routes(app, templates, deps):
             "line_op": line_op or "",
             "machine_type": machine_type_val,
             "machine_brand": machine_brand_val,
+            "machine_id": machine_id_val,
+            "problem": problem_val,
+            "machine_id_options": machine_id_options,
+            "problem_options": problem_options,
             "takeover_logs_map": takeover_logs_map,
             "start_date": start_date or "",
             "end_date": end_date or "",
@@ -973,6 +995,8 @@ def register_web_routes(app, templates, deps):
                      line_op: Optional[str] = Query(None),
                      machine_type: Optional[str] = Query(None),
                      machine_brand: Optional[str] = Query(None),
+                     machine_id: Optional[str] = Query(None),
+                     problem: Optional[str] = Query(None),
                      equipment: Optional[str] = Query(None),  # backward-compatible query param
                      start_date: Optional[str] = Query(None),
                      end_date: Optional[str] = Query(None),
@@ -994,9 +1018,15 @@ def register_web_routes(app, templates, deps):
             start_utc = end_utc = None
     
         machine_type_val, machine_brand_val = _normalize_history_filters(machine_type, machine_brand, equipment)
+        machine_id_val = (machine_id or "").strip()
+        problem_val = (problem or "").strip()
         master = _build_master_data(db)
         rows = _query_done_or_cancel(db, line_op, None, start_utc, end_utc)
         rows = _apply_history_machine_filters(rows, machine_type_val, machine_brand_val, master["machine_type_map"])
+        if machine_id_val:
+            rows = [t for t in rows if ((t.machine_id or "").strip().lower() == machine_id_val.lower())]
+        if problem_val:
+            rows = [t for t in rows if ((t.problem or "").strip().lower() == problem_val.lower())]
         takeover_logs_map = _build_takeover_logs_map(db, [t.id for t in rows])
         type_by_key, brand_to_type = _build_history_type_lookup(master["machine_type_map"])
     
@@ -1078,6 +1108,8 @@ def register_web_routes(app, templates, deps):
         if line_op: filename += f"_{line_op}"
         if machine_type_val: filename += f"_{machine_type_val}"
         if machine_brand_val: filename += f"_{machine_brand_val}"
+        if machine_id_val: filename += f"_{machine_id_val}"
+        if problem_val: filename += f"_{problem_val}"
         if start_date or end_date: filename += f"_{start_date or ''}-{end_date or ''}"
         filename += ".xlsx"
     

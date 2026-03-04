@@ -8,8 +8,15 @@
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);font-family:system-ui,Segoe UI,Arial}
     .container{max-width:1400px;margin:26px auto;padding:0 16px}
-    .title{font-size:24px;font-weight:700;margin-bottom:8px}
-    .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 14px}
+    .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+    .title{font-size:24px;font-weight:700;margin:0}
+    .top-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .filters{display:flex;flex-direction:column;gap:10px;margin:8px 0 14px}
+    .filters-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
+    .date-actions-group{display:flex;align-items:flex-end;gap:10px;margin-left:0}
+    .date-range-group{display:flex;align-items:flex-end;gap:10px}
+    .to-sep{margin-bottom:10px}
+    .filters label{font-size:12px;color:#374151;display:flex;flex-direction:column;gap:6px}
 
     .btn, a.btn, button.btn{
       display:inline-flex;gap:8px;align-items:center;
@@ -19,6 +26,17 @@
     }
     .btn.primary{background:#2563eb;color:#fff;border-color:#1f5fe6}
     select,input{padding:8px;border:1px solid #d7d9e0;border-radius:10px}
+    #filterBrand,
+    #filterProblem{
+      width:220px;
+      min-width:220px;
+      max-width:100%;
+    }
+    #filterMachineId{
+      width:170px;
+      min-width:170px;
+      max-width:100%;
+    }
     .card{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
     .table-wrap{overflow:auto;max-height:calc(100vh - 220px);border-top:1px solid var(--line);}
     table{border-collapse:collapse; width:max-content; min-width:1600px}
@@ -41,49 +59,81 @@
 </head>
 <body>
 <div class="container">
-  <div class="title">History Log</div>
+  <div class="topbar">
+    <div class="title">History Log</div>
+    <div class="top-actions">
+      <button class="btn" type="button" id="exportBtn">Export Excel</button>
+      <button class="btn" type="button" onclick="goBack()">Back</button>
+      <a class="btn" href="/logout">Logout</a>
+    </div>
+  </div>
 
   <form id="filterForm" class="filters" method="get" action="/history">
-    <label>Line No.
-      <select name="line_op" id="filterLine">
-        <option value="">All</option>
-        {% for lo in line_ops %}
-          <option value="{{ lo }}" {% if line_op==lo %}selected{% endif %}>{{ lo }}</option>
-        {% endfor %}
-      </select>
-    </label>
+    <div class="filters-row">
+      <label>Line No.
+        <select name="line_op" id="filterLine">
+          <option value="">All</option>
+          {% for lo in line_ops %}
+            <option value="{{ lo }}" {% if line_op==lo %}selected{% endif %}>{{ lo }}</option>
+          {% endfor %}
+        </select>
+      </label>
 
-    <label>Machine
-      <select name="machine_type" id="filterType">
-        <option value="">All</option>
-        {% for mt in machine_type_map.keys()|list|sort %}
-          <option value="{{ mt }}" {% if machine_type==mt %}selected{% endif %}>{{ mt }}</option>
-        {% endfor %}
-        {% if machine_type and machine_type not in machine_type_map %}
-          <option value="{{ machine_type }}" selected>{{ machine_type }}</option>
-        {% endif %}
-      </select>
-    </label>
+      <label>Machine
+        <select name="machine_type" id="filterType">
+          <option value="">All</option>
+          {% for mt in machine_type_map.keys()|list|sort %}
+            <option value="{{ mt }}" {% if machine_type==mt %}selected{% endif %}>{{ mt }}</option>
+          {% endfor %}
+          {% if machine_type and machine_type not in machine_type_map %}
+            <option value="{{ machine_type }}" selected>{{ machine_type }}</option>
+          {% endif %}
+        </select>
+      </label>
 
-    <label>Machine Type
-      <select name="machine_brand" id="filterBrand" data-selected="{{ machine_brand }}">
-        <option value="">All</option>
-      </select>
-    </label>
+      <label>Machine Type
+        <select name="machine_brand" id="filterBrand" data-selected="{{ machine_brand }}">
+          <option value="">All</option>
+        </select>
+      </label>
+      <label>Machine ID
+        <select name="machine_id" id="filterMachineId">
+          <option value="">All</option>
+          {% for mid in machine_id_options %}
+            <option value="{{ mid }}" {% if machine_id==mid %}selected{% endif %}>{{ mid }}</option>
+          {% endfor %}
+          {% if machine_id and machine_id not in machine_id_options %}
+            <option value="{{ machine_id }}" selected>{{ machine_id }}</option>
+          {% endif %}
+        </select>
+      </label>
 
-    <label>Date
-      <input type="date" name="start_date" id="filterStart" value="{{ start_date or '' }}">
-    </label>
-    <span>to</span>
-    <label>
-      <input type="date" name="end_date" id="filterEnd" value="{{ end_date or '' }}">
-    </label>
+      <label>Problem
+        <select name="problem" id="filterProblem">
+          <option value="">All</option>
+          {% for p in problem_options %}
+            <option value="{{ p }}" {% if problem==p %}selected{% endif %}>{{ p }}</option>
+          {% endfor %}
+          {% if problem and problem not in problem_options %}
+            <option value="{{ problem }}" selected>{{ problem }}</option>
+          {% endif %}
+        </select>
+      </label>
 
-    <button class="btn primary" type="submit">Filter</button>
-    <button class="btn" type="button" id="btnClear">Clear</button>
-    <button class="btn" type="button" onclick="goBack()">Back</button>
-
-    <button class="btn" type="button" id="exportBtn">Export Excel</button>
+      <div class="date-actions-group">
+        <div class="date-range-group">
+          <label>Date
+            <input type="date" name="start_date" id="filterStart" value="{{ start_date or '' }}">
+          </label>
+          <span class="to-sep">to</span>
+          <label>
+            <input type="date" name="end_date" id="filterEnd" value="{{ end_date or '' }}">
+          </label>
+          <button class="btn primary" type="submit">Filter</button>
+          <button class="btn" type="button" id="btnClear">Clear</button>
+        </div>
+      </div>
+    </div>
   </form>
 
   {% macro hms(sec) -%}
@@ -182,6 +232,8 @@ const tbody = document.getElementById('tbody');
 const selType  = document.getElementById('filterType');
 const selBrand = document.getElementById('filterBrand');
 const selLine  = document.getElementById('filterLine');
+const selMachineId = document.getElementById('filterMachineId');
+const selProblem = document.getElementById('filterProblem');
 const startInp = document.getElementById('filterStart');
 const endInp   = document.getElementById('filterEnd');
 const btnExport = document.getElementById('exportBtn');
@@ -246,12 +298,16 @@ function buildHistoryParams(){
   const line = (selLine.value || '').trim();
   const machineType = (selType.value || '').trim();
   const machineBrand = (selBrand.value || '').trim();
+  const machineId = (selMachineId.value || '').trim();
+  const problem = (selProblem.value || '').trim();
   const startDate = (startInp.value || '').trim();
   const endDate = (endInp.value || '').trim();
 
   if(line) params.set('line_op', line);
   if(machineType) params.set('machine_type', machineType);
   if(machineBrand) params.set('machine_brand', machineBrand);
+  if(machineId) params.set('machine_id', machineId);
+  if(problem) params.set('problem', problem);
   if(startDate) params.set('start_date', startDate);
   if(endDate) params.set('end_date', endDate);
   return params;

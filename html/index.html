@@ -209,13 +209,11 @@
                     <div class="row-actions-row">
                       <button type="button" class="btn sm warn" data-id="{{ t.id }}" data-action="doing" onclick="return doActionFromDataset(this)">Doing</button>
                       <button type="button" class="btn sm neutral" data-id="{{ t.id }}" data-action="hold"  onclick="return doActionFromDataset(this)">Hold</button>
+                      <button type="button" class="btn sm takeover" data-id="{{ t.id }}" data-action="takeover" onclick="return doActionFromDataset(this)">Takeover</button>
                     </div>
                     <div class="row-actions-row">
                       <button type="button" class="btn sm danger" data-id="{{ t.id }}" data-action="cancel" onclick="return doActionFromDataset(this)">Cancel</button>
                       <button type="button" class="btn sm good"   data-id="{{ t.id }}" data-action="done"   onclick="return doActionFromDataset(this)">Done</button>
-                    </div>
-                    <div class="row-actions-row">
-                      <button type="button" class="btn sm takeover" data-id="{{ t.id }}" data-action="takeover" onclick="return doActionFromDataset(this)">Takeover</button>
                     </div>
                   </div>
                 </td>
