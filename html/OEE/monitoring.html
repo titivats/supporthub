@@ -98,7 +98,7 @@
     }
     .line-filters{
       display:grid;
-      grid-template-columns:repeat(2,minmax(190px,1fr)) minmax(170px,1fr) 28px minmax(170px,1fr) 140px 110px;
+      grid-template-columns:minmax(220px,1fr) minmax(170px,1fr) 28px minmax(170px,1fr) 140px 110px;
       gap:10px;
       align-items:end;
     }
@@ -224,13 +224,6 @@
       padding:0 12px;
       font-size:13px;
       border-radius:10px;
-    }
-    .line-filter-btn{
-      min-height:34px;
-      padding:0 12px;
-      font-size:13px;
-      border-radius:10px;
-      font-weight:600;
     }
     .metric-btn.active{
       background:var(--primary);
@@ -367,8 +360,7 @@
 
   <form class="card filter-card" method="get" action="/monitoring">
     <p class="filter-title">Filter Criteria (OEE + Key Metrics)</p>
-    <input type="hidden" name="line_machine_type" value="{{ line_machine_type or '' }}">
-    <input type="hidden" name="line_machine_brand" value="{{ line_machine_brand or '' }}">
+    <input type="hidden" name="line_support_area" value="{{ line_support_area or '' }}">
     <input type="hidden" name="line_start_date" value="{{ line_start_date or '' }}">
     <input type="hidden" name="line_end_date" value="{{ line_end_date or '' }}">
     {% if line_applied %}<input type="hidden" name="line_apply" value="1">{% endif %}
@@ -480,20 +472,15 @@
       </div>
     </section>
   </div>
-  {% else %}
-  <div class="empty">
-    Click <strong>Apply Filter</strong> in <strong>Filter Criteria</strong> to show OEE and Key Metrics.
-  </div>
   {% endif %}
 
   <section class="panel chart-panel">
     <div class="chart-head">
       <div>
-        <h2 class="section-title">By Line Operate No.</h2>
-        <div class="chart-meta" id="lineChartMeta">Y-axis = %Downtime, Y2-axis = Hours, X-axis = Line Operate No. | Target &lt; 1%</div>
+        <h2 class="section-title">Dashboard by Support Area</h2>
+        <div class="chart-meta" id="lineChartMeta">Y-axis = %Downtime, Y2-axis = Hours, X-axis = Support Area | Target &lt; 1%</div>
       </div>
       <div class="metric-switch" id="metricSwitch">
-        <button class="btn line-filter-btn" type="button" id="lineFilterBtn">Filter Line</button>
         <button class="btn metric-btn active" type="button" data-metric="downtime_percent">%Downtime</button>
         <button class="btn metric-btn" type="button" data-metric="oee_percent">OEE</button>
         <button class="btn metric-btn" type="button" data-metric="mtbf_hours">MTBF</button>
@@ -508,20 +495,14 @@
       <input type="hidden" name="start_date" value="{{ start_date or '' }}">
       <input type="hidden" name="end_date" value="{{ end_date or '' }}">
       {% if applied %}<input type="hidden" name="apply" value="1">{% endif %}
-      <p class="filter-title">By Line Operate No. Filters</p>
+      <p class="filter-title">Dashboard by Support Area Filters</p>
       <div class="line-filters">
-        <label>Machine
-          <select id="lineMachineTypeSelect" name="line_machine_type">
+        <label>Support Area
+          <select id="lineSupportAreaSelect" name="line_support_area">
             <option value="">All</option>
-            {% for mt in machine_type_map.keys()|list|sort %}
-              <option value="{{ mt }}" {% if line_machine_type == mt %}selected{% endif %}>{{ mt }}</option>
+            {% for area in support_areas %}
+              <option value="{{ area }}" {% if line_support_area == area %}selected{% endif %}>{{ area }}</option>
             {% endfor %}
-          </select>
-        </label>
-
-        <label>Machine Type
-          <select id="lineMachineBrandSelect" name="line_machine_brand" data-selected="{{ line_machine_brand }}">
-            <option value="">All</option>
           </select>
         </label>
 
@@ -558,15 +539,11 @@
   const machineTypeMap = {{ machine_type_map | tojson }};
   const oeeTypeSelect = document.getElementById("oeeMachineTypeSelect");
   const oeeBrandSelect = document.getElementById("oeeMachineBrandSelect");
-  const lineTypeSelect = document.getElementById("lineMachineTypeSelect");
-  const lineBrandSelect = document.getElementById("lineMachineBrandSelect");
   const lineMetricsNode = document.getElementById("lineMetricsData");
   const lineAppliedNode = document.getElementById("lineAppliedData");
   const lineBarChart = document.getElementById("lineBarChart");
   const lineChartMeta = document.getElementById("lineChartMeta");
   const metricSwitch = document.getElementById("metricSwitch");
-  const lineFilterBtn = document.getElementById("lineFilterBtn");
-  const lineFilterCard = document.getElementById("lineFilterCard");
   const machineColorTools = document.getElementById("machineColorTools");
   const machineColorGrid = document.getElementById("machineColorGrid");
   const machineColorReset = document.getElementById("machineColorReset");
@@ -615,7 +592,6 @@
   }
 
   bindMachineBrandFilter(oeeTypeSelect, oeeBrandSelect);
-  bindMachineBrandFilter(lineTypeSelect, lineBrandSelect);
 
   function escapeSvg(value){
     return String(value ?? "")
@@ -626,10 +602,7 @@
       .replaceAll("'", "&#39;");
   }
   function formatLineOperateName(rawLine){
-    const lineVal = String(rawLine || "").trim();
-    const upper = lineVal.toUpperCase();
-    if (/^BT0[1-9]$/.test(upper)) return `${upper}_W`;
-    return lineVal;
+    return String(rawLine || "").trim();
   }
   function formatHourTick(value){
     const n = Number(value || 0);
@@ -642,7 +615,7 @@
   const metricConfig = {
     downtime_percent: {
       key: "downtime_percent",
-      axis: "Y-axis = %Downtime, Y2-axis = Hours, X-axis = Line Operate No.",
+      axis: "Y-axis = %Downtime, Y2-axis = Hours, X-axis = Support Area",
       yAxisLabel: "Downtime (%)",
       format: (v) => `${v.toFixed(2)}%`,
       tickFormat: (v) => `${v.toFixed(v < 10 ? 1 : 0)}%`,
@@ -653,7 +626,7 @@
     },
     oee_percent: {
       key: "oee_percent",
-      axis: "Y-axis = OEE (%), Y2-axis = Hours, X-axis = Line Operate No.",
+      axis: "Y-axis = OEE (%), Y2-axis = Hours, X-axis = Support Area",
       yAxisLabel: "OEE (%)",
       format: (v) => `${v.toFixed(2)}%`,
       tickFormat: (v) => `${v.toFixed(0)}%`,
@@ -664,7 +637,7 @@
     },
     mtbf_hours: {
       key: "mtbf_hours",
-      axis: "Y-axis = MTBF (hours), Y2-axis = Hours, X-axis = Line Operate No.",
+      axis: "Y-axis = MTBF (hours), Y2-axis = Hours, X-axis = Support Area",
       yAxisLabel: "MTBF (hours)",
       format: (v) => `${v.toFixed(2)} h`,
       tickFormat: (v) => `${v.toFixed(0)} h`,
@@ -675,7 +648,7 @@
     },
     mttr_hours: {
       key: "mttr_hours",
-      axis: "Y-axis = MTTR (hours), Y2-axis = Hours, X-axis = Line Operate No.",
+      axis: "Y-axis = MTTR (hours), Y2-axis = Hours, X-axis = Support Area",
       yAxisLabel: "MTTR (hours)",
       format: (v) => `${v.toFixed(2)} h`,
       tickFormat: (v) => `${v.toFixed(v < 10 ? 1 : 0)} h`,
@@ -707,6 +680,7 @@
   let machineColorOverrides = {};
   const machineColorCache = new Map();
   let currentMetricKey = "downtime_percent";
+  const lineSupportAreaSelected = {{ (line_support_area or "") | tojson }};
   const normalizeMachineKey = (name) => String(name || "").trim().toLowerCase();
   function buildDefaultMachineColorOverrides(){
     const out = {};
@@ -767,6 +741,15 @@
     if(!source) return "";
     const linePrefix = parent ? `${parent} - ` : "";
     return linePrefix && source.startsWith(linePrefix) ? source.slice(linePrefix.length) : source;
+  }
+  function toMachineTypeAndIdLabel(rawLabel){
+    const parts = String(rawLabel || "").split("|").map((p) => p.trim());
+    if (parts.length >= 3){
+      const machineType = parts[1] || "-";
+      const machineId = parts[2] || "-";
+      return `${machineType} | ${machineId}`;
+    }
+    return String(rawLabel || "").trim();
   }
   function getMachineColorItems(){
     const names = new Set();
@@ -838,7 +821,7 @@
     const cfg = metricConfig[metricKey] || metricConfig.downtime_percent;
 
     if (!lineApplied){
-      lineBarChart.innerHTML = '<div class="bar-empty">Click <strong>Apply Filter</strong> in By Line Operate No. Filters to show chart.</div>';
+      lineBarChart.innerHTML = '<div class="bar-empty">Click <strong>Apply Filter</strong> in Dashboard by Support Area Filters to show chart.</div>';
       if (lineChartMeta) lineChartMeta.textContent = `${cfg.axis} | ${cfg.targetLabel}`;
       return;
     }
@@ -882,6 +865,7 @@
 
     const allValues = groups.flatMap((g) => g.bars.map((b) => b.value));
     const hasBreakdown = groups.some((g) => g.bars.length > 1);
+    const showMachineInfoLabels = true;
 
     const targetValue = Number(cfg.target || 0);
     const valueMax = Math.max(...allValues, targetValue, 0);
@@ -891,11 +875,11 @@
     if (Math.abs(yMax - valueMax) < 1e-9) yMax += step;
     const tickCount = Math.max(3, Math.round(yMax / step));
 
-    const pad = { top: 28, right: 90, bottom: hasBreakdown ? 178 : 128, left: 76 };
+    const pad = { top: 28, right: 90, bottom: showMachineInfoLabels ? 194 : (hasBreakdown ? 178 : 128), left: 76 };
     const stageWidth = (lineBarChart?.clientWidth || lineBarChart?.offsetWidth || 0);
     const usableStageWidth = Math.max(260, stageWidth - 16);
     const width = stageWidth > 0 ? usableStageWidth : 940;
-    const height = hasBreakdown ? 500 : 440;
+    const height = showMachineInfoLabels ? 520 : (hasBreakdown ? 500 : 440);
     const plotWidth = width - pad.left - pad.right;
     const plotHeight = height - pad.top - pad.bottom;
     const plotBottom = pad.top + plotHeight;
@@ -940,7 +924,11 @@
       const clusterStart = pad.left + slotWidth * groupIdx + (slotWidth - clusterWidth) / 2;
       const groupCenterX = clusterStart + clusterWidth / 2;
       const lineDisplay = formatLineOperateName(group.line);
-      const groupLabel = lineDisplay.length > 14 ? `${lineDisplay.slice(0, 14)}...` : lineDisplay;
+      const supportAreaDisplay = String(lineSupportAreaSelected || "").trim();
+      const groupLabelSource = supportAreaDisplay
+        ? (groups.length === 1 ? supportAreaDisplay : `${supportAreaDisplay} (${lineDisplay})`)
+        : lineDisplay;
+      const groupLabel = groupLabelSource.length > 22 ? `${groupLabelSource.slice(0, 22)}...` : groupLabelSource;
       const groupBars = bars.map((bar, barIdx) => {
         const x = clusterStart + barIdx * (barWidth + barGap);
         const y = yFromValue(bar.value);
@@ -950,8 +938,8 @@
         const valueText = cfg.format(bar.value);
         const rawName = String(bar.name || "");
         const itemLabelRaw = toDisplayItemLabel(rawName, group.line);
-        const itemLabel = itemLabelRaw;
-        const showItemLabel = hasBreakdown;
+        const itemLabel = toMachineTypeAndIdLabel(itemLabelRaw);
+        const showItemLabel = showMachineInfoLabels;
         const fillColor = bar.isBreakdown ? pickMachineColor(itemLabelRaw) : chartPalette.lineSummary;
         return `
           <g>
@@ -962,7 +950,7 @@
           </g>
         `;
       }).join("");
-      const groupLabelY = hasBreakdown ? (plotBottom + 128) : (plotBottom + 78);
+      const groupLabelY = showMachineInfoLabels ? (plotBottom + 142) : (hasBreakdown ? (plotBottom + 128) : (plotBottom + 78));
       return `
         <g>
           ${groupBars}
@@ -981,7 +969,7 @@
         ${barParts}
         <line x1="${pad.left}" y1="${targetY}" x2="${pad.left + plotWidth}" y2="${targetY}" stroke="${chartPalette.targetLine}" stroke-width="2.6" stroke-dasharray="7 5" stroke-linecap="round"></line>
         <text x="${pad.left + plotWidth - 4}" y="${Math.max(targetY - 8, pad.top + 12)}" text-anchor="end" font-size="12" font-weight="700" fill="${chartPalette.targetText}">${escapeSvg(cfg.targetLabel)}</text>
-        <text x="${pad.left + plotWidth / 2}" y="${height - 16}" text-anchor="middle" font-size="13" font-weight="700" fill="${chartPalette.itemText}">Line Operate No.</text>
+        <text x="${pad.left + plotWidth / 2}" y="${height - 16}" text-anchor="middle" font-size="13" font-weight="700" fill="${chartPalette.itemText}">Support Area</text>
         <text x="22" y="${pad.top + plotHeight / 2}" text-anchor="middle" transform="rotate(-90 22 ${pad.top + plotHeight / 2})" font-size="13" font-weight="700" fill="${chartPalette.itemText}">${escapeSvg(cfg.yAxisLabel)}</text>
         <text x="${width - 22}" y="${pad.top + plotHeight / 2}" text-anchor="middle" transform="rotate(90 ${width - 22} ${pad.top + plotHeight / 2})" font-size="13" font-weight="700" fill="${chartPalette.itemText}">${escapeSvg(cfg.rightAxisLabel || "Hours")}</text>
       </svg>
@@ -1001,19 +989,6 @@
       });
     });
     renderLineChart("downtime_percent");
-  }
-  if (lineFilterBtn && lineFilterCard){
-    lineFilterBtn.addEventListener("click", () => {
-      lineFilterCard.scrollIntoView({ behavior:"smooth", block:"center" });
-      const firstField = lineFilterCard.querySelector("select, input");
-      if (firstField) {
-        try {
-          firstField.focus({ preventScroll:true });
-        } catch (_) {
-          firstField.focus();
-        }
-      }
-    });
   }
   let lineChartResizeTimer = null;
   window.addEventListener("resize", () => {

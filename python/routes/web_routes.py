@@ -94,7 +94,12 @@ def register_web_routes(app, templates, deps):
                 })
         return rows
 
-    def _apply_monitoring_line_machine_map(rows: List[Ticket], line_machine_map: Dict[str, List[str]]) -> List[Ticket]:
+    def _apply_monitoring_line_machine_map(
+        rows: List[Ticket],
+        line_machine_map: Dict[str, List[str]],
+        include_full_context_label: bool = False,
+        strict_mode: bool = True,
+    ) -> List[Ticket]:
         normalized_map: Dict[str, List[Dict[str, str]]] = {}
         for line_no, items in (line_machine_map or {}).items():
             line_key = _clean_text(line_no).upper()
@@ -120,6 +125,17 @@ def register_web_routes(app, templates, deps):
                 normalized_map[line_key] = allowed_entries
 
         if not normalized_map:
+            if strict_mode:
+                return rows
+            for row in rows:
+                parsed_machine_raw = _clean_text(getattr(row, "history_machine", ""))
+                parsed_type_raw = _clean_text(getattr(row, "history_machine_type", ""))
+                parsed_machine_id_raw = _clean_text(getattr(row, "machine_id", ""))
+                display_machine = parsed_machine_raw or "-"
+                display_machine_type = parsed_type_raw or "-"
+                display_machine_id = parsed_machine_id_raw or "-"
+                row.mapped_monitoring_item = f"{display_machine} | {display_machine_type} | {display_machine_id}"
+                row.mapped_monitoring_machine_id = parsed_machine_id_raw
             return rows
 
         out: List[Ticket] = []
@@ -127,12 +143,26 @@ def register_web_routes(app, templates, deps):
             line_key = _clean_text(getattr(row, "machine", "")).upper()
             allowed = normalized_map.get(line_key)
             if not allowed:
-                # Strict mapping mode: if map exists, line must be explicitly mapped.
+                if strict_mode:
+                    # Strict mapping mode: if map exists, line must be explicitly mapped.
+                    continue
+                parsed_machine_raw = _clean_text(getattr(row, "history_machine", ""))
+                parsed_type_raw = _clean_text(getattr(row, "history_machine_type", ""))
+                parsed_machine_id_raw = _clean_text(getattr(row, "machine_id", ""))
+                display_machine = parsed_machine_raw or "-"
+                display_machine_type = parsed_type_raw or "-"
+                display_machine_id = parsed_machine_id_raw or "-"
+                row.mapped_monitoring_item = f"{display_machine} | {display_machine_type} | {display_machine_id}"
+                row.mapped_monitoring_machine_id = parsed_machine_id_raw
+                out.append(row)
                 continue
 
-            parsed_machine = _clean_text(getattr(row, "history_machine", "")).lower()
-            parsed_type = _clean_text(getattr(row, "history_machine_type", "")).lower()
-            parsed_machine_id = _clean_text(getattr(row, "machine_id", "")).lower()
+            parsed_machine_raw = _clean_text(getattr(row, "history_machine", ""))
+            parsed_type_raw = _clean_text(getattr(row, "history_machine_type", ""))
+            parsed_machine_id_raw = _clean_text(getattr(row, "machine_id", ""))
+            parsed_machine = parsed_machine_raw.lower()
+            parsed_type = parsed_type_raw.lower()
+            parsed_machine_id = parsed_machine_id_raw.lower()
             raw_equipment = _clean_text(getattr(row, "equipment", "")).lower()
             candidates: List[str] = []
             for candidate in [parsed_machine_id, parsed_type, parsed_machine, raw_equipment]:
@@ -181,10 +211,53 @@ def register_web_routes(app, templates, deps):
                         break
 
             if matched_item:
-                row.mapped_monitoring_item = matched_item
+                if include_full_context_label:
+                    display_machine = parsed_machine_raw or matched_item or "-"
+                    display_machine_type = parsed_type_raw or matched_item or "-"
+                    display_machine_id = parsed_machine_id_raw or matched_machine_id or "-"
+                    row.mapped_monitoring_item = f"{display_machine} | {display_machine_type} | {display_machine_id}"
+                else:
+                    row.mapped_monitoring_item = matched_item
                 row.mapped_monitoring_machine_id = matched_machine_id
                 out.append(row)
+            elif not strict_mode:
+                display_machine = parsed_machine_raw or "-"
+                display_machine_type = parsed_type_raw or "-"
+                display_machine_id = parsed_machine_id_raw or "-"
+                row.mapped_monitoring_item = f"{display_machine} | {display_machine_type} | {display_machine_id}"
+                row.mapped_monitoring_machine_id = parsed_machine_id_raw
+                out.append(row)
 
+        return out
+
+    def _apply_line_support_area_filter(rows: List[Ticket],
+                                        support_area: Optional[str],
+                                        support_area_map: Dict[str, List[str]]) -> List[Ticket]:
+        selected = _clean_text(support_area)
+        if not selected:
+            return rows
+
+        canonical_key = ""
+        for key in (support_area_map or {}).keys():
+            if _clean_text(key).lower() == selected.lower():
+                canonical_key = key
+                break
+        if not canonical_key:
+            return []
+
+        allowed_machines = {
+            _clean_text(machine).lower()
+            for machine in (support_area_map.get(canonical_key) or [])
+            if _clean_text(machine)
+        }
+        if not allowed_machines:
+            return []
+
+        out: List[Ticket] = []
+        for row in rows:
+            parsed_machine = _clean_text(getattr(row, "history_machine", "")).lower()
+            if parsed_machine and parsed_machine in allowed_machines:
+                out.append(row)
         return out
 
     def _build_monitoring_line_chart_metrics(rows: List[Ticket],
@@ -1544,6 +1617,7 @@ def register_web_routes(app, templates, deps):
         start_date: Optional[str] = Query(None),
         end_date: Optional[str] = Query(None),
         apply: Optional[str] = Query(None),
+        line_support_area: Optional[str] = Query(None),
         line_machine_type: Optional[str] = Query(None),
         line_machine_brand: Optional[str] = Query(None),
         line_start_date: Optional[str] = Query(None),
@@ -1560,7 +1634,9 @@ def register_web_routes(app, templates, deps):
     
         master = _build_master_data(db)
         machine_type_val, machine_brand_val = _normalize_history_filters(machine_type, machine_brand, equipment)
-        line_machine_type_val, line_machine_brand_val = _normalize_history_filters(line_machine_type, line_machine_brand, None)
+        line_support_area_val = _clean_text(line_support_area)
+        if not line_support_area_val:
+            line_support_area_val = _clean_text(line_machine_type)  # backward-compatible query param
         applied = (apply or "").strip() == "1"
         line_applied = (line_apply or "").strip() == "1"
 
@@ -1573,8 +1649,7 @@ def register_web_routes(app, templates, deps):
             applied = False
 
         if (clear_line or "").strip() == "1":
-            line_machine_type_val = ""
-            line_machine_brand_val = ""
+            line_support_area_val = ""
             line_start_date = ""
             line_end_date = ""
             line_applied = False
@@ -1604,13 +1679,18 @@ def register_web_routes(app, templates, deps):
 
         if line_applied:
             chart_rows = _query_done_or_cancel(db, None, None, line_start_utc, line_end_utc)
-            chart_rows = _apply_history_machine_filters(
+            chart_rows = _apply_history_machine_filters(chart_rows, "", "", master["machine_type_map"])
+            chart_rows = _apply_line_support_area_filter(
                 chart_rows,
-                line_machine_type_val,
-                line_machine_brand_val,
-                master["machine_type_map"],
+                line_support_area_val,
+                master.get("support_area_map", {}),
             )
-            chart_rows = _apply_monitoring_line_machine_map(chart_rows, master.get("line_machine_map", {}))
+            chart_rows = _apply_monitoring_line_machine_map(
+                chart_rows,
+                master.get("line_machine_map", {}),
+                include_full_context_label=True,
+                strict_mode=False,
+            )
             line_metrics = _build_monitoring_line_chart_metrics(chart_rows, line_start_utc, line_end_utc)
     
         return templates.TemplateResponse("OEE/monitoring.html", {
@@ -1618,6 +1698,7 @@ def register_web_routes(app, templates, deps):
             "user": user,
             "line_ops": master["line_ops"],
             "machine_type_map": master["machine_type_map"],
+            "support_areas": master.get("support_areas", []),
             "line_op": line_op or "",
             "machine_type": machine_type_val,
             "machine_brand": machine_brand_val,
@@ -1626,8 +1707,7 @@ def register_web_routes(app, templates, deps):
             "applied": applied,
             "metrics": metrics,
             "filtered_count": filtered_count,
-            "line_machine_type": line_machine_type_val,
-            "line_machine_brand": line_machine_brand_val,
+            "line_support_area": line_support_area_val,
             "line_start_date": line_start_date or "",
             "line_end_date": line_end_date or "",
             "line_applied": line_applied,
