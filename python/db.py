@@ -420,10 +420,12 @@ def _ensure_postgres_manage_users_table() -> None:
         coalesce(u.role, '-') AS "Role",
         ''::text AS "Set New Password",
         coalesce(nullif(u.password_plain, ''), '-') AS "Actual Password",
-        to_char(u.created_at + interval '7 hour', 'YYYY-MM-DD HH24:MI:SS') AS "Created",
+        to_char(u.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
         ''::text AS "Action"
     FROM public.users u
-    ORDER BY u.username ASC
+    ORDER BY
+        CASE WHEN upper(coalesce(u.username, '')) = 'ADMIN' THEN 0 ELSE 1 END,
+        u.username ASC
     """
 
     with engine.begin() as con:
@@ -450,10 +452,12 @@ def _ensure_postgres_manage_users_table() -> None:
                     coalesce(u.role, '-') AS "Role",
                     ''::text AS "Set New Password",
                     coalesce(nullif(u.password_plain, ''), '-') AS "Actual Password",
-                    to_char(u.created_at + interval '7 hour', 'YYYY-MM-DD HH24:MI:SS') AS "Created",
+                    to_char(u.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
                     ''::text AS "Action"
                 FROM public.users u
-                ORDER BY u.username ASC;
+                ORDER BY
+                    CASE WHEN upper(coalesce(u.username, '')) = 'ADMIN' THEN 0 ELSE 1 END,
+                    u.username ASC;
                 RETURN NULL;
             END;
             $$;
