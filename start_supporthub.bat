@@ -18,7 +18,7 @@ set "HOST=127.0.0.1"
 set "PORT=8888"
 set "LOGDIR=%PROJ%\logs"
 set "LOGFILE=%LOGDIR%\start_supporthub.log"
-set "LOCALCFG=%PROJ%\supporthub.local.bat"
+set "WEB_CONFIG=%PROJ%\web.config"
 set "DEFAULT_DB_URL=postgresql+psycopg://supporthub_user:YourStrongPassword@127.0.0.1:5432/supporthub"
 
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
@@ -28,20 +28,21 @@ echo ================== %DATE% %TIME% ================== >> "%LOGFILE%"
 echo [INFO] Launcher started >> "%LOGFILE%"
 
 if not defined SUPPORTHUB_DATABASE_URL (
-  if exist "%LOCALCFG%" (
-    call "%LOCALCFG%"
-  ) else (
-    > "%LOCALCFG%" (
-      echo @echo off
-      echo rem Local launcher config for SupportHub (not committed)
-      echo set "SUPPORTHUB_DATABASE_URL=%DEFAULT_DB_URL%"
+  if exist "%WEB_CONFIG%" (
+    for /f "usebackq delims=" %%A in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$cfg=[xml](Get-Content -Raw '%WEB_CONFIG%'); $n=$cfg.SelectSingleNode('/configuration/appSettings/add[@key=''SUPPORTHUB_DATABASE_URL'']'); if($n -and $n.value){$n.value}"`) do (
+      set "SUPPORTHUB_DATABASE_URL=%%A"
     )
-    call "%LOCALCFG%"
-    echo [INFO] Created local config: %LOCALCFG%
-    echo [INFO] Created local config: %LOCALCFG% >> "%LOGFILE%"
-    echo [INFO] If DB password differs, edit SUPPORTHUB_DATABASE_URL in this file.
-    echo [INFO] If DB password differs, edit SUPPORTHUB_DATABASE_URL in this file. >> "%LOGFILE%"
+    if defined SUPPORTHUB_DATABASE_URL (
+      echo [INFO] Loaded SUPPORTHUB_DATABASE_URL from web.config
+      echo [INFO] Loaded SUPPORTHUB_DATABASE_URL from web.config >> "%LOGFILE%"
+    )
   )
+)
+
+if not defined SUPPORTHUB_DATABASE_URL (
+  set "SUPPORTHUB_DATABASE_URL=%DEFAULT_DB_URL%"
+  echo [WARN] SUPPORTHUB_DATABASE_URL not found in web.config, using launcher default.
+  echo [WARN] SUPPORTHUB_DATABASE_URL not found in web.config, using launcher default. >> "%LOGFILE%"
 )
 
 set "DB_MODE=SQLite (default)"
