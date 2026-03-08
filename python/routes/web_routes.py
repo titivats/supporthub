@@ -29,18 +29,211 @@ def register_web_routes(app, templates, deps):
     line_notify = deps["line_notify"]
     parse_th_date_range = deps["parse_th_date_range"]
     build_monitoring_metrics = deps["build_monitoring_metrics"]
+    build_monitoring_line_metrics = deps["build_monitoring_line_metrics"]
     TH_OFFSET = deps["TH_OFFSET"]
     _fmt_hms = deps["_fmt_hms"]
     fmt_th = deps["fmt_th"]
     _clean_text = deps["_clean_text"]
     _is_admin_user = deps["_is_admin_user"]
     _build_master_data = deps["_build_master_data"]
+    get_line_machine_map = deps["get_line_machine_map"]
+    save_line_machine_map = deps["save_line_machine_map"]
     _master_status_text = deps["_master_status_text"]
     _add_master_audit = deps["_add_master_audit"]
     _get_master_rows_sorted = deps["_get_master_rows_sorted"]
     bump_active_version = deps["bump_active_version"]
     EQUIPMENTS = deps["EQUIPMENTS"]
     iot_monitor = deps["iot_monitor"]
+    LINE_MACHINE_ITEM_SEPARATOR = "|||"
+
+    def _split_line_monitoring_item(raw_item: Optional[str]) -> tuple[str, str]:
+        item = _clean_text(raw_item)
+        if not item:
+            return "", ""
+        if LINE_MACHINE_ITEM_SEPARATOR in item:
+            left, right = item.split(LINE_MACHINE_ITEM_SEPARATOR, 1)
+            return _clean_text(left), _clean_text(right)
+        return item, ""
+
+    def _normalize_line_monitoring_item(raw_item: Optional[str]) -> str:
+        monitoring_item, machine_id = _split_line_monitoring_item(raw_item)
+        if not monitoring_item:
+            return ""
+        if machine_id:
+            return f"{monitoring_item}{LINE_MACHINE_ITEM_SEPARATOR}{machine_id}"
+        return monitoring_item
+
+    def _line_monitoring_item_matches(raw_item: Optional[str], target_keys: set[str]) -> bool:
+        raw_norm = _clean_text(raw_item).lower()
+        if raw_norm and raw_norm in target_keys:
+            return True
+        monitoring_item, machine_id = _split_line_monitoring_item(raw_item)
+        monitoring_key = monitoring_item.lower()
+        machine_id_key = machine_id.lower()
+        return (monitoring_key and monitoring_key in target_keys) or (machine_id_key and machine_id_key in target_keys)
+
+    def _flatten_line_machine_map(line_machine_map: Dict[str, List[str]]) -> List[Dict[str, str]]:
+        rows: List[Dict[str, str]] = []
+        for line_no in sorted((line_machine_map or {}).keys(), key=lambda s: s.lower()):
+            items = sorted(line_machine_map.get(line_no, []), key=lambda s: s.lower())
+            for raw_item in items:
+                monitoring_item, machine_id = _split_line_monitoring_item(raw_item)
+                rows.append({
+                    "line_no": line_no,
+                    "monitoring_item": monitoring_item or _clean_text(raw_item),
+                    "machine_id": machine_id,
+                    "raw_value": _clean_text(raw_item),
+                })
+        return rows
+
+    def _apply_monitoring_line_machine_map(rows: List[Ticket], line_machine_map: Dict[str, List[str]]) -> List[Ticket]:
+        normalized_map: Dict[str, List[Dict[str, str]]] = {}
+        for line_no, items in (line_machine_map or {}).items():
+            line_key = _clean_text(line_no).upper()
+            if not line_key:
+                continue
+            allowed_entries: List[Dict[str, str]] = []
+            seen = set()
+            for raw_item in (items or []):
+                item_type, machine_id = _split_line_monitoring_item(raw_item)
+                if not item_type:
+                    continue
+                dedupe_key = f"{item_type.lower()}{LINE_MACHINE_ITEM_SEPARATOR}{machine_id.lower()}"
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+                allowed_entries.append({
+                    "item_type": item_type,
+                    "item_type_l": item_type.lower(),
+                    "machine_id": machine_id,
+                    "machine_id_l": machine_id.lower(),
+                })
+            if allowed_entries:
+                normalized_map[line_key] = allowed_entries
+
+        if not normalized_map:
+            return rows
+
+        out: List[Ticket] = []
+        for row in rows:
+            line_key = _clean_text(getattr(row, "machine", "")).upper()
+            allowed = normalized_map.get(line_key)
+            if not allowed:
+                # Strict mapping mode: if map exists, line must be explicitly mapped.
+                continue
+
+            parsed_machine = _clean_text(getattr(row, "history_machine", "")).lower()
+            parsed_type = _clean_text(getattr(row, "history_machine_type", "")).lower()
+            parsed_machine_id = _clean_text(getattr(row, "machine_id", "")).lower()
+            raw_equipment = _clean_text(getattr(row, "equipment", "")).lower()
+            candidates: List[str] = []
+            for candidate in [parsed_machine_id, parsed_type, parsed_machine, raw_equipment]:
+                if candidate and candidate not in candidates:
+                    candidates.append(candidate)
+            if "||" in raw_equipment:
+                left, right = raw_equipment.split("||", 1)
+                for candidate in [_clean_text(left).lower(), _clean_text(right).lower()]:
+                    if candidate and candidate not in candidates:
+                        candidates.append(candidate)
+
+            matched_item = ""
+            matched_machine_id = ""
+            for entry in allowed:
+                entry_machine_id = entry.get("machine_id_l", "")
+                entry_type = entry.get("item_type", "")
+                entry_type_l = entry.get("item_type_l", "")
+                if entry_machine_id:
+                    if any(c and c == entry_machine_id for c in candidates):
+                        matched_item = entry_type or entry.get("machine_id", "")
+                        matched_machine_id = entry.get("machine_id", "")
+                        break
+                    # Fallback: if Machine ID does not match ticket data, allow matching by Machine Type.
+                    if any(c and c == entry_type_l for c in candidates):
+                        matched_item = entry_type
+                        matched_machine_id = ""
+                        break
+                    continue
+                if any(c and c == entry_type_l for c in candidates):
+                    matched_item = entry_type
+                    break
+
+            if not matched_item:
+                for c in candidates:
+                    if not c or len(c) < 3:
+                        continue
+                    for entry in allowed:
+                        if entry.get("machine_id_l", ""):
+                            continue
+                        entry_type_l = entry.get("item_type_l", "")
+                        if len(entry_type_l) >= 3 and (entry_type_l in c or c in entry_type_l):
+                            matched_item = entry.get("item_type", "")
+                            matched_machine_id = entry.get("machine_id", "")
+                            break
+                    if matched_item:
+                        break
+
+            if matched_item:
+                row.mapped_monitoring_item = matched_item
+                row.mapped_monitoring_machine_id = matched_machine_id
+                out.append(row)
+
+        return out
+
+    def _build_monitoring_line_chart_metrics(rows: List[Ticket],
+                                             start_utc: Optional[datetime],
+                                             end_utc: Optional[datetime]) -> List[Dict[str, object]]:
+        line_rows = build_monitoring_line_metrics(rows, start_utc, end_utc)
+        if not line_rows:
+            return []
+
+        item_groups: Dict[tuple[str, str], List[Ticket]] = {}
+        for row in rows:
+            line_val = _clean_text(getattr(row, "machine", "")) or "-"
+            item_val = _clean_text(getattr(row, "mapped_monitoring_item", ""))
+            if not item_val:
+                continue
+            item_groups.setdefault((line_val, item_val), []).append(row)
+
+        item_metrics_by_line: Dict[str, List[Dict[str, object]]] = {}
+        for (line_val, item_val), group_rows in item_groups.items():
+            grouped_metric_rows = build_monitoring_line_metrics(group_rows, start_utc, end_utc)
+            if not grouped_metric_rows:
+                continue
+
+            metric = dict(grouped_metric_rows[0])
+            metric["line_op"] = item_val
+            metric["line_parent"] = line_val
+            metric["is_item_breakdown"] = True
+            item_metrics_by_line.setdefault(line_val.upper(), []).append(metric)
+
+        out: List[Dict[str, object]] = []
+        seen_lines = set()
+        for line_metric in line_rows:
+            line_val = _clean_text(str(line_metric.get("line_op", ""))) or "-"
+            line_key = line_val.upper()
+            seen_lines.add(line_key)
+
+            line_copy = dict(line_metric)
+            line_copy["line_parent"] = line_val
+            line_copy["is_item_breakdown"] = False
+            out.append(line_copy)
+
+            item_rows = sorted(
+                item_metrics_by_line.get(line_key, []),
+                key=lambda m: str(m.get("line_op", "")).lower(),
+            )
+            out.extend(item_rows)
+
+        for line_key in sorted(item_metrics_by_line.keys()):
+            if line_key in seen_lines:
+                continue
+            extra_rows = sorted(
+                item_metrics_by_line[line_key],
+                key=lambda m: str(m.get("line_op", "")).lower(),
+            )
+            out.extend(extra_rows)
+
+        return out
     # ---------- Auth routes ----------
     @app.get("/login", response_class=HTMLResponse)
     def login_page(request: Request):
@@ -175,10 +368,13 @@ def register_web_routes(app, templates, deps):
             "problem_rows": rows["problem_rows"],
             "audit_rows": rows["audit_rows"],
             "machine_options": master["machine_list"],
+            "line_options": master["line_ops"],
             "support_area_options": master["support_areas"],
             "machine_type_map": master["machine_type_map"],
             "machine_id_map": master["machine_id_map"],
             "support_area_map": master["support_area_map"],
+            "monitoring_item_options": master["monitoring_item_options"],
+            "line_machine_map_rows": _flatten_line_machine_map(master["line_machine_map"]),
             "status_text": _master_status_text(status),
             "status_key": status,
             "fmt_th": fmt_th,
@@ -192,6 +388,7 @@ def register_web_routes(app, templates, deps):
     
         import xlsxwriter
     
+        master = _build_master_data(db)
         rows = _get_master_rows_sorted(db, "desc")
         line_rows = rows["line_rows"]
         machine_rows = rows["machine_rows"]
@@ -199,6 +396,7 @@ def register_web_routes(app, templates, deps):
         machine_id_rows = rows["machine_id_rows"]
         support_area_rows = rows["support_area_rows"]
         support_area_map_rows = rows["support_area_map_rows"]
+        line_machine_map_rows = _flatten_line_machine_map(master["line_machine_map"])
         problem_rows = rows["problem_rows"]
         audit_rows = rows["audit_rows"]
     
@@ -256,6 +454,12 @@ def register_web_routes(app, templates, deps):
             ["Support Area", "Machine", "Created (TH)"],
             [[r.support_area or "-", r.machine or "-", fmt_th(r.created_at)] for r in support_area_map_rows],
             [26, 28, 20],
+        )
+        make_sheet(
+            "Line Monitoring Map",
+            ["Line No.", "Machine Type", "Machine ID"],
+            [[r["line_no"] or "-", r["monitoring_item"] or "-", r.get("machine_id") or "-"] for r in line_machine_map_rows],
+            [24, 30, 24],
         )
         make_sheet(
             "Problem",
@@ -336,7 +540,83 @@ def register_web_routes(app, templates, deps):
         db.commit()
         bump_active_version()
         return RedirectResponse("/admin/machines?status=support_area_map_added", status_code=303)
-    
+
+    @app.post("/admin/machines/add-line-machine")
+    def admin_add_line_machine(request: Request,
+                               line_no: str = Form(...),
+                               monitoring_item: str = Form(...),
+                               db: Session = Depends(get_db)):
+        me = get_current_user(request, db)
+        if not _is_admin_user(me):
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        line_val = _clean_text(line_no).upper()
+        item_val = _normalize_line_monitoring_item(monitoring_item)
+        if not line_val or not item_val:
+            return RedirectResponse("/admin/machines?status=invalid_input", status_code=303)
+
+        line_exists = db.query(MasterLine).filter(MasterLine.line_no == line_val).first()
+        if not line_exists:
+            return RedirectResponse("/admin/machines?status=line_not_found", status_code=303)
+
+        line_machine_map = get_line_machine_map(db)
+        items = [_normalize_line_monitoring_item(v) for v in line_machine_map.get(line_val, [])]
+        if any(v.lower() == item_val.lower() for v in items if v):
+            return RedirectResponse("/admin/machines?status=line_machine_map_exists", status_code=303)
+
+        item_type, machine_id = _split_line_monitoring_item(item_val)
+        if machine_id:
+            target_machine_id = machine_id.lower()
+            for mapped_line_no, mapped_items in (line_machine_map or {}).items():
+                for mapped_item in mapped_items or []:
+                    _, mapped_machine_id = _split_line_monitoring_item(mapped_item)
+                    if mapped_machine_id and mapped_machine_id.lower() == target_machine_id:
+                        return RedirectResponse("/admin/machines?status=line_machine_map_exists", status_code=303)
+
+        items.append(item_val)
+        line_machine_map[line_val] = sorted({v for v in items if v}, key=lambda s: s.lower())
+        save_line_machine_map(db, line_machine_map)
+        item_display = f"{item_type} ({machine_id})" if machine_id else item_type
+        _add_master_audit(db, me.username, "ADD", "LINE_MACHINE_MAP", f"{line_val} -> {item_display}")
+        db.commit()
+        bump_active_version()
+        return RedirectResponse("/admin/machines?status=line_machine_map_added", status_code=303)
+
+    @app.post("/admin/machines/delete-line-machine")
+    def admin_delete_line_machine(request: Request,
+                                  line_no: str = Form(...),
+                                  monitoring_item: str = Form(...),
+                                  db: Session = Depends(get_db)):
+        me = get_current_user(request, db)
+        if not _is_admin_user(me):
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        line_val = _clean_text(line_no).upper()
+        item_val = _normalize_line_monitoring_item(monitoring_item)
+        if not line_val or not item_val:
+            return RedirectResponse("/admin/machines?status=invalid_input", status_code=303)
+
+        line_machine_map = get_line_machine_map(db)
+        items = [_normalize_line_monitoring_item(v) for v in line_machine_map.get(line_val, [])]
+        if not items:
+            return RedirectResponse("/admin/machines?status=line_machine_map_not_found", status_code=303)
+
+        kept = [v for v in items if v and v.lower() != item_val.lower()]
+        if len(kept) == len(items):
+            return RedirectResponse("/admin/machines?status=line_machine_map_not_found", status_code=303)
+
+        if kept:
+            line_machine_map[line_val] = kept
+        else:
+            line_machine_map.pop(line_val, None)
+        save_line_machine_map(db, line_machine_map)
+        item_type, machine_id = _split_line_monitoring_item(item_val)
+        item_display = f"{item_type} ({machine_id})" if machine_id else item_type
+        _add_master_audit(db, me.username, "DELETE", "LINE_MACHINE_MAP", f"{line_val} -> {item_display}")
+        db.commit()
+        bump_active_version()
+        return RedirectResponse("/admin/machines?status=line_machine_map_deleted", status_code=303)
+
     @app.post("/admin/machines/delete-support-area-machine")
     def admin_delete_support_area_machine(request: Request, map_id: int = Form(...), db: Session = Depends(get_db)):
         me = get_current_user(request, db)
@@ -392,8 +672,20 @@ def register_web_routes(app, templates, deps):
             return RedirectResponse("/admin/machines?status=line_not_found", status_code=303)
     
         line_val = _clean_text(row.line_no)
+        line_machine_map = get_line_machine_map(db)
+        had_line_mapping = line_val.upper() in line_machine_map
+        if had_line_mapping:
+            line_machine_map.pop(line_val.upper(), None)
+            save_line_machine_map(db, line_machine_map)
         db.delete(row)
-        _add_master_audit(db, me.username, "DELETE", "LINE", line_val or "-")
+        _add_master_audit(
+            db,
+            me.username,
+            "DELETE",
+            "LINE",
+            line_val or "-",
+            details=f"cascade_line_machine_map={1 if had_line_mapping else 0}",
+        )
         db.commit()
         bump_active_version()
         return RedirectResponse("/admin/machines?status=line_deleted", status_code=303)
@@ -410,11 +702,41 @@ def register_web_routes(app, templates, deps):
     
         machine_val = _clean_text(row.machine)
         deleted_map = deleted_ids = deleted_types = deleted_probs = 0
+        removed_line_machine_items = 0
         if machine_val:
+            removed_keys = {machine_val.lower()}
+            machine_type_rows = db.query(MasterMachineType.machine_type).filter(MasterMachineType.machine == machine_val).all()
+            for type_row in machine_type_rows:
+                type_val = _clean_text(type_row.machine_type)
+                if type_val:
+                    removed_keys.add(type_val.lower())
+            machine_id_rows = db.query(MasterMachineId.machine_id).filter(MasterMachineId.machine == machine_val).all()
+            for id_row in machine_id_rows:
+                machine_id_val = _clean_text(id_row.machine_id)
+                if machine_id_val:
+                    removed_keys.add(machine_id_val.lower())
+
             deleted_map = db.query(MasterSupportAreaMap).filter(MasterSupportAreaMap.machine == machine_val).delete(synchronize_session=False)
             deleted_ids = db.query(MasterMachineId).filter(MasterMachineId.machine == machine_val).delete(synchronize_session=False)
             deleted_types = db.query(MasterMachineType).filter(MasterMachineType.machine == machine_val).delete(synchronize_session=False)
             deleted_probs = db.query(MasterProblem).filter(MasterProblem.machine == machine_val).delete(synchronize_session=False)
+
+            line_machine_map = get_line_machine_map(db)
+            if line_machine_map:
+                for line_no in list(line_machine_map.keys()):
+                    items = list(line_machine_map.get(line_no, []))
+                    kept = []
+                    for item in items:
+                        if _line_monitoring_item_matches(item, removed_keys):
+                            removed_line_machine_items += 1
+                            continue
+                        kept.append(item)
+                    if kept:
+                        line_machine_map[line_no] = kept
+                    else:
+                        line_machine_map.pop(line_no, None)
+                if removed_line_machine_items > 0:
+                    save_line_machine_map(db, line_machine_map)
         db.delete(row)
         _add_master_audit(
             db,
@@ -422,7 +744,7 @@ def register_web_routes(app, templates, deps):
             "DELETE",
             "MACHINE",
             machine_val or "-",
-            details=f"cascade_maps={deleted_map},cascade_machine_ids={deleted_ids},cascade_machine_types={deleted_types},cascade_problems={deleted_probs}",
+            details=f"cascade_maps={deleted_map},cascade_machine_ids={deleted_ids},cascade_machine_types={deleted_types},cascade_problems={deleted_probs},cascade_line_machine_items={removed_line_machine_items}",
         )
         db.commit()
         bump_active_version()
@@ -441,7 +763,17 @@ def register_web_routes(app, templates, deps):
         machine_val = _clean_text(row.machine)
         machine_type_val = _clean_text(row.machine_type)
         deleted_ids = deleted_probs = 0
+        removed_line_machine_items = 0
         if machine_val and machine_type_val:
+            target_keys = {machine_type_val.lower()}
+            machine_id_rows = db.query(MasterMachineId.machine_id).filter(
+                MasterMachineId.machine == machine_val,
+                MasterMachineId.machine_type == machine_type_val,
+            ).all()
+            for id_row in machine_id_rows:
+                machine_id_val = _clean_text(id_row.machine_id)
+                if machine_id_val:
+                    target_keys.add(machine_id_val.lower())
             deleted_ids = db.query(MasterMachineId).filter(
                 MasterMachineId.machine == machine_val,
                 MasterMachineId.machine_type == machine_type_val,
@@ -450,6 +782,23 @@ def register_web_routes(app, templates, deps):
                 MasterProblem.machine == machine_val,
                 MasterProblem.machine_type == machine_type_val,
             ).delete(synchronize_session=False)
+
+            line_machine_map = get_line_machine_map(db)
+            if line_machine_map:
+                for line_no in list(line_machine_map.keys()):
+                    items = list(line_machine_map.get(line_no, []))
+                    kept = []
+                    for item in items:
+                        if _line_monitoring_item_matches(item, target_keys):
+                            removed_line_machine_items += 1
+                            continue
+                        kept.append(item)
+                    if kept:
+                        line_machine_map[line_no] = kept
+                    else:
+                        line_machine_map.pop(line_no, None)
+                if removed_line_machine_items > 0:
+                    save_line_machine_map(db, line_machine_map)
         db.delete(row)
         _add_master_audit(
             db,
@@ -457,7 +806,7 @@ def register_web_routes(app, templates, deps):
             "DELETE",
             "MACHINE_TYPE",
             f"{machine_val} || {machine_type_val}",
-            details=f"cascade_machine_ids={deleted_ids},cascade_problems={deleted_probs}",
+            details=f"cascade_machine_ids={deleted_ids},cascade_problems={deleted_probs},cascade_line_machine_items={removed_line_machine_items}",
         )
         db.commit()
         bump_active_version()
@@ -473,9 +822,36 @@ def register_web_routes(app, templates, deps):
         if not row:
             return RedirectResponse("/admin/machines?status=machine_id_not_found", status_code=303)
     
-        item_key = f"{_clean_text(row.machine)} || {_clean_text(row.machine_type)} || {_clean_text(row.machine_id)}"
+        machine_id_val = _clean_text(row.machine_id)
+        removed_line_machine_items = 0
+        if machine_id_val:
+            line_machine_map = get_line_machine_map(db)
+            if line_machine_map:
+                target_key = machine_id_val.lower()
+                for line_no in list(line_machine_map.keys()):
+                    items = list(line_machine_map.get(line_no, []))
+                    kept = []
+                    for item in items:
+                        if _line_monitoring_item_matches(item, {target_key}):
+                            removed_line_machine_items += 1
+                            continue
+                        kept.append(item)
+                    if kept:
+                        line_machine_map[line_no] = kept
+                    else:
+                        line_machine_map.pop(line_no, None)
+                if removed_line_machine_items > 0:
+                    save_line_machine_map(db, line_machine_map)
+        item_key = f"{_clean_text(row.machine)} || {_clean_text(row.machine_type)} || {machine_id_val}"
         db.delete(row)
-        _add_master_audit(db, me.username, "DELETE", "MACHINE_ID", item_key)
+        _add_master_audit(
+            db,
+            me.username,
+            "DELETE",
+            "MACHINE_ID",
+            item_key,
+            details=f"cascade_line_machine_items={removed_line_machine_items}",
+        )
         db.commit()
         bump_active_version()
         return RedirectResponse("/admin/machines?status=machine_id_deleted", status_code=303)
@@ -1130,6 +1506,13 @@ def register_web_routes(app, templates, deps):
         start_date: Optional[str] = Query(None),
         end_date: Optional[str] = Query(None),
         apply: Optional[str] = Query(None),
+        line_machine_type: Optional[str] = Query(None),
+        line_machine_brand: Optional[str] = Query(None),
+        line_start_date: Optional[str] = Query(None),
+        line_end_date: Optional[str] = Query(None),
+        line_apply: Optional[str] = Query(None),
+        clear_oee: Optional[str] = Query(None),
+        clear_line: Optional[str] = Query(None),
         db: Session = Depends(get_db),
     ):
         try:
@@ -1139,11 +1522,29 @@ def register_web_routes(app, templates, deps):
     
         master = _build_master_data(db)
         machine_type_val, machine_brand_val = _normalize_history_filters(machine_type, machine_brand, equipment)
+        line_machine_type_val, line_machine_brand_val = _normalize_history_filters(line_machine_type, line_machine_brand, None)
         applied = (apply or "").strip() == "1"
+        line_applied = (line_apply or "").strip() == "1"
+
+        if (clear_oee or "").strip() == "1":
+            line_op = ""
+            machine_type_val = ""
+            machine_brand_val = ""
+            start_date = ""
+            end_date = ""
+            applied = False
+
+        if (clear_line or "").strip() == "1":
+            line_machine_type_val = ""
+            line_machine_brand_val = ""
+            line_start_date = ""
+            line_end_date = ""
+            line_applied = False
     
         rows: List[Ticket] = []
         metrics = None
         filtered_count = 0
+        line_metrics: List[Dict[str, object]] = []
     
         start_utc = end_utc = None
         try:
@@ -1156,6 +1557,23 @@ def register_web_routes(app, templates, deps):
             rows = _apply_history_machine_filters(rows, machine_type_val, machine_brand_val, master["machine_type_map"])
             filtered_count = len(rows)
             metrics = build_monitoring_metrics(rows, start_utc, end_utc)
+
+        line_start_utc = line_end_utc = None
+        try:
+            line_start_utc, line_end_utc = parse_th_date_range(line_start_date, line_end_date)
+        except Exception:
+            line_start_utc = line_end_utc = None
+
+        if line_applied:
+            chart_rows = _query_done_or_cancel(db, None, None, line_start_utc, line_end_utc)
+            chart_rows = _apply_history_machine_filters(
+                chart_rows,
+                line_machine_type_val,
+                line_machine_brand_val,
+                master["machine_type_map"],
+            )
+            chart_rows = _apply_monitoring_line_machine_map(chart_rows, master.get("line_machine_map", {}))
+            line_metrics = _build_monitoring_line_chart_metrics(chart_rows, line_start_utc, line_end_utc)
     
         return templates.TemplateResponse("OEE/monitoring.html", {
             "request": request,
@@ -1170,6 +1588,12 @@ def register_web_routes(app, templates, deps):
             "applied": applied,
             "metrics": metrics,
             "filtered_count": filtered_count,
+            "line_machine_type": line_machine_type_val,
+            "line_machine_brand": line_machine_brand_val,
+            "line_start_date": line_start_date or "",
+            "line_end_date": line_end_date or "",
+            "line_applied": line_applied,
+            "line_metrics": line_metrics,
         })
     
     

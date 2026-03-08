@@ -2,6 +2,7 @@
 
 from datetime import datetime, time
 from typing import Optional, List, Dict
+import json
 import io
 import threading
 
@@ -37,7 +38,7 @@ from python.db import (
     init_db,
 )
 from python.notify import line_notify
-from python.OEE.oee_metrics import build_monitoring_metrics, parse_th_date_range
+from python.OEE.oee_metrics import build_monitoring_line_metrics, build_monitoring_metrics, parse_th_date_range
 from python.time_utils import TH_OFFSET, fmt_hms as _fmt_hms, fmt_th
 
 from python.IoT.iot_monitor_service import iot_monitor
@@ -128,6 +129,7 @@ DEFAULT_SUPPORT_AREA_MAP = {
     "Rework": ["Rework Machine"],
     "Etc..": ["Etc.."],
 }
+LINE_MACHINE_MAP_SETTING_KEY = "line_machine_map_v1"
 
 MASTER_STATUS_TEXT = {
     "line_added": "Added new Line No. successfully",
@@ -158,6 +160,10 @@ MASTER_STATUS_TEXT = {
     "problem_exists": "Problem already exists",
     "problem_deleted": "Deleted Problem successfully",
     "problem_not_found": "Problem not found",
+    "line_machine_map_added": "Mapped Line No. to Monitoring item successfully",
+    "line_machine_map_exists": "This Line No. and Monitoring item mapping already exists",
+    "line_machine_map_deleted": "Deleted Line No. and Monitoring item mapping successfully",
+    "line_machine_map_not_found": "Line No. and Monitoring item mapping not found",
     "invalid_input": "Please provide all required fields",
 }
 
@@ -312,6 +318,67 @@ def _is_admin_user(user: User) -> bool:
 
 _ensure_master_seeded()
 
+def _normalize_line_machine_map(raw: object) -> Dict[str, List[str]]:
+    out: Dict[str, List[str]] = {}
+    if not isinstance(raw, dict):
+        return out
+
+    for raw_line, raw_items in raw.items():
+        line_no = _clean_text(str(raw_line)).upper()
+        if not line_no:
+            continue
+
+        items: List[str] = []
+        seen = set()
+        source = raw_items if isinstance(raw_items, list) else [raw_items]
+        for entry in source:
+            item = _clean_text(str(entry))
+            if not item:
+                continue
+            key = item.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(item)
+        if items:
+            out[line_no] = sorted(items, key=lambda s: s.lower())
+    return out
+
+def _get_line_machine_map(db: Session) -> Dict[str, List[str]]:
+    row = db.query(AppSetting).filter(AppSetting.key == LINE_MACHINE_MAP_SETTING_KEY).first()
+    if not row or not _clean_text(row.value):
+        return {}
+    try:
+        raw = json.loads(row.value)
+    except Exception:
+        return {}
+    return _normalize_line_machine_map(raw)
+
+def _save_line_machine_map(db: Session, line_machine_map: Dict[str, List[str]]) -> None:
+    payload = json.dumps(_normalize_line_machine_map(line_machine_map), ensure_ascii=False)
+    row = db.query(AppSetting).filter(AppSetting.key == LINE_MACHINE_MAP_SETTING_KEY).first()
+    if not row:
+        row = AppSetting(key=LINE_MACHINE_MAP_SETTING_KEY, value=payload)
+    else:
+        row.value = payload
+    db.add(row)
+
+def _build_monitoring_item_options(
+    machine_list: List[str],
+    machine_type_map: Dict[str, List[str]],
+    machine_id_map: Dict[str, List[str]],
+    line_machine_map: Dict[str, List[str]],
+) -> List[str]:
+    raw_values: List[str] = []
+    raw_values.extend(machine_list or [])
+    for values in (machine_type_map or {}).values():
+        raw_values.extend(values or [])
+    for values in (machine_id_map or {}).values():
+        raw_values.extend(values or [])
+    for values in (line_machine_map or {}).values():
+        raw_values.extend(values or [])
+    return _unique_clean(raw_values)
+
 def _build_master_data(db: Session) -> Dict[str, object]:
     line_ops = _unique_clean([r.line_no for r in db.query(MasterLine).order_by(MasterLine.line_no.asc()).all()])
 
@@ -417,6 +484,13 @@ def _build_master_data(db: Session) -> Dict[str, object]:
         machine_id_map[key] = _unique_clean(machine_id_map.get(key, []))
     for area in support_areas:
         support_area_map[area] = _unique_clean(support_area_map.get(area, []))
+    line_machine_map = _get_line_machine_map(db)
+    monitoring_item_options = _build_monitoring_item_options(
+        machine_list,
+        machine_type_map,
+        machine_id_map,
+        line_machine_map,
+    )
 
     return {
         "line_ops": line_ops,
@@ -427,6 +501,8 @@ def _build_master_data(db: Session) -> Dict[str, object]:
         "problem_map": problem_map,
         "problem_combo_map": problem_combo_map,
         "machine_list": machine_list,
+        "line_machine_map": line_machine_map,
+        "monitoring_item_options": monitoring_item_options,
     }
 
 def _master_status_text(status_key: str) -> str:
@@ -497,12 +573,15 @@ register_web_routes(
         "line_notify": line_notify,
         "parse_th_date_range": parse_th_date_range,
         "build_monitoring_metrics": build_monitoring_metrics,
+        "build_monitoring_line_metrics": build_monitoring_line_metrics,
         "TH_OFFSET": TH_OFFSET,
         "_fmt_hms": _fmt_hms,
         "fmt_th": fmt_th,
         "_clean_text": _clean_text,
         "_is_admin_user": _is_admin_user,
         "_build_master_data": _build_master_data,
+        "get_line_machine_map": _get_line_machine_map,
+        "save_line_machine_map": _save_line_machine_map,
         "_master_status_text": _master_status_text,
         "_add_master_audit": _add_master_audit,
         "_get_master_rows_sorted": _get_master_rows_sorted,

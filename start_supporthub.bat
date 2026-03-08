@@ -1,5 +1,5 @@
 @echo off
-setlocal ENABLEDELAYEDEXPANSION
+setlocal
 
 rem =====================================================================
 rem  start_supporthub.bat  (OFFLINE / WHEELS-ONLY / STICKY CONSOLE)
@@ -18,12 +18,36 @@ set "HOST=127.0.0.1"
 set "PORT=8888"
 set "LOGDIR=%PROJ%\logs"
 set "LOGFILE=%LOGDIR%\start_supporthub.log"
+set "LOCALCFG=%PROJ%\supporthub.local.bat"
+set "DEFAULT_DB_URL=postgresql+psycopg://supporthub_user:YourStrongPassword@127.0.0.1:5432/supporthub"
 
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
 
 echo.>> "%LOGFILE%"
 echo ================== %DATE% %TIME% ================== >> "%LOGFILE%"
 echo [INFO] Launcher started >> "%LOGFILE%"
+
+if not defined SUPPORTHUB_DATABASE_URL (
+  if exist "%LOCALCFG%" (
+    call "%LOCALCFG%"
+  ) else (
+    > "%LOCALCFG%" (
+      echo @echo off
+      echo rem Local launcher config for SupportHub (not committed)
+      echo set "SUPPORTHUB_DATABASE_URL=%DEFAULT_DB_URL%"
+    )
+    call "%LOCALCFG%"
+    echo [INFO] Created local config: %LOCALCFG%
+    echo [INFO] Created local config: %LOCALCFG% >> "%LOGFILE%"
+    echo [INFO] If DB password differs, edit SUPPORTHUB_DATABASE_URL in this file.
+    echo [INFO] If DB password differs, edit SUPPORTHUB_DATABASE_URL in this file. >> "%LOGFILE%"
+  )
+)
+
+set "DB_MODE=SQLite (default)"
+if defined SUPPORTHUB_DATABASE_URL (
+  set "DB_MODE=PostgreSQL (SUPPORTHUB_DATABASE_URL)"
+)
 
 echo.
 echo === SupportHub OFFLINE start (wheels only) ===
@@ -32,6 +56,7 @@ echo Wheels  : %WHEELS%
 echo Venv    : %VENV%
 echo Req     : %REQ%
 echo Host:Port -> %HOST%:%PORT%
+echo Database: %DB_MODE%
 echo.
 
 if not exist "%PROJ%" (
@@ -79,6 +104,17 @@ if errorlevel 1 (
   echo [WARN] Some packages may have failed to install. See log:
   echo        %LOGFILE%
   echo [WARN] pip install returned non-zero. >> "%LOGFILE%"
+)
+
+set "DB_SCHEME=%SUPPORTHUB_DATABASE_URL:~0,10%"
+if /I "%DB_SCHEME%"=="postgresql" (
+  python -c "import psycopg" >nul 2>&1
+  if errorlevel 1 (
+    echo [ERROR] psycopg is missing for PostgreSQL connection.
+    echo [ERROR] Install psycopg or add psycopg wheels into: %WHEELS%
+    echo [ERROR] psycopg is missing for PostgreSQL connection. >> "%LOGFILE%"
+    goto :END
+  )
 )
 
 if not exist "%PROJ%\python\server_app.py" (

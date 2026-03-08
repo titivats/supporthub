@@ -480,6 +480,38 @@
                 </div>
               </form>
             </div>
+
+            <div class="mini-card">
+              <h4>Map Line to Monitoring Page</h4>
+              <div class="note">Use this mapping in Monitoring chart by line with Machine Type + optional Machine ID.</div>
+              <form class="form-row" id="line-monitoring-map-form" method="post" action="/admin/machines/add-line-machine">
+                <div>
+                  <label>Line No.</label>
+                  <select name="line_no" required>
+                    <option value="">-- Select Line No. --</option>
+                    {% for lo in line_options %}
+                      <option value="{{ lo }}">{{ lo }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label>Machine Type Filter</label>
+                  <select id="line-monitoring-type-filter" required>
+                    <option value="">-- Select Machine Type --</option>
+                  </select>
+                </div>
+                <div class="inline-action">
+                  <input type="hidden" id="line-monitoring-item-input" name="monitoring_item">
+                  <div>
+                    <label>Machine ID Filter (Optional)</label>
+                    <select id="line-monitoring-id-filter">
+                      <option value="">-- Select Machine Type Filter First --</option>
+                    </select>
+                  </div>
+                  <button class="btn primary" type="submit">Add Mapping</button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
 
@@ -535,6 +567,7 @@
     <div class="data-tabs" id="master-data-tabs">
       <button type="button" class="tab-btn active" data-tab-target="tab-support-area">Support Area ({{ support_area_rows|length }})</button>
       <button type="button" class="tab-btn" data-tab-target="tab-support-map">Area Mapping ({{ support_area_map_rows|length }})</button>
+      <button type="button" class="tab-btn" data-tab-target="tab-line-machine-map">Line-Monitoring Map ({{ line_machine_map_rows|length }})</button>
       <button type="button" class="tab-btn" data-tab-target="tab-line">Line No. ({{ line_rows|length }})</button>
       <button type="button" class="tab-btn" data-tab-target="tab-machine">Machine ({{ machine_rows|length }})</button>
       <button type="button" class="tab-btn" data-tab-target="tab-machine-type">Machine Type ({{ machine_type_rows|length }})</button>
@@ -590,6 +623,34 @@
                 </tr>
               {% endfor %}
               {% if support_area_map_rows|length == 0 %}<tr class="no-data"><td colspan="4" class="muted">No support area mappings</td></tr>{% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-line-machine-map" class="tab-panel">
+      <div class="card">
+        <h3>Line-Monitoring Mapping List</h3>
+        <div class="table-wrap rows-5">
+          <table class="sortable-table">
+            <thead><tr><th data-type="text">Line No.</th><th data-type="text">Machine Type</th><th data-type="text">Machine ID</th><th data-type="text">Action</th></tr></thead>
+            <tbody>
+              {% for r in line_machine_map_rows %}
+                <tr>
+                  <td data-sort="{{ (r.line_no or '')|lower }}">{{ r.line_no }}</td>
+                  <td data-sort="{{ (r.monitoring_item or '')|lower }}">{{ r.monitoring_item }}</td>
+                  <td data-sort="{{ (r.machine_id or '')|lower }}">{{ r.machine_id or '-' }}</td>
+                  <td class="action-cell" data-sort="delete">
+                    <form method="post" action="/admin/machines/delete-line-machine" onsubmit="return confirm('Delete this line-monitoring mapping?');">
+                      <input type="hidden" name="line_no" value="{{ r.line_no }}">
+                      <input type="hidden" name="monitoring_item" value="{{ r.raw_value or r.monitoring_item }}">
+                      <button class="btn danger sm" type="submit">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+              {% if line_machine_map_rows|length == 0 %}<tr class="no-data"><td colspan="4" class="muted">No line-monitoring mappings</td></tr>{% endif %}
             </tbody>
           </table>
         </div>
@@ -758,6 +819,7 @@
 </div>
 
 <script id="machine-type-map-data" type="application/json">{{ machine_type_map | tojson }}</script>
+<script id="machine-id-map-data" type="application/json">{{ machine_id_map | tojson }}</script>
 <script>
 (function(){
   let machineTypeMap = {};
@@ -765,6 +827,12 @@
     machineTypeMap = JSON.parse(document.getElementById('machine-type-map-data')?.textContent || "{}");
   }catch(_){
     machineTypeMap = {};
+  }
+  let machineIdMap = {};
+  try{
+    machineIdMap = JSON.parse(document.getElementById('machine-id-map-data')?.textContent || "{}");
+  }catch(_){
+    machineIdMap = {};
   }
 
   const tabButtons = Array.from(document.querySelectorAll('.tab-btn[data-tab-target]'));
@@ -855,6 +923,104 @@
     document.getElementById('add-problem-type'),
     { required:false, optionalPlaceholder:'-- Machine Level (Optional) --' }
   );
+
+  const fillSelectOptions = (select, values, placeholder) => {
+    if(!select) return;
+    const current = (select.value || '').trim();
+    select.innerHTML = '';
+    const first = document.createElement('option');
+    first.value = '';
+    first.textContent = placeholder || '-- Select --';
+    select.appendChild(first);
+    (values || []).forEach(v => {
+      const val = (v || '').trim();
+      if(!val) return;
+      const option = document.createElement('option');
+      option.value = val;
+      option.textContent = val;
+      select.appendChild(option);
+    });
+    const keep = Array.from(select.options).some(o => o.value.toLowerCase() === current.toLowerCase());
+    select.value = keep ? (Array.from(select.options).find(o => o.value.toLowerCase() === current.toLowerCase())?.value || '') : '';
+  };
+
+  const getAllMachineTypes = () => {
+    const all = [];
+    Object.values(machineTypeMap || {}).forEach(items => {
+      (items || []).forEach(v => all.push(v));
+    });
+    return uniqueSorted(all);
+  };
+
+  const getMachineIdsForType = (machineType) => {
+    const selectedType = (machineType || '').trim().toLowerCase();
+    if(!selectedType) return [];
+    const out = [];
+    Object.entries(machineIdMap || {}).forEach(([combo, ids]) => {
+      const parts = String(combo || '').split('||');
+      const typeVal = (parts[1] || '').trim().toLowerCase();
+      if(typeVal !== selectedType) return;
+      (ids || []).forEach(v => out.push(v));
+    });
+    return uniqueSorted(out);
+  };
+  const LINE_MACHINE_ITEM_SEPARATOR = '|||';
+  const buildMonitoringItemValue = (machineType, machineId) => {
+    const typeVal = (machineType || '').trim();
+    const idVal = (machineId || '').trim();
+    if(!typeVal) return '';
+    if(!idVal) return typeVal;
+    return `${typeVal}${LINE_MACHINE_ITEM_SEPARATOR}${idVal}`;
+  };
+
+  const initLineMonitoringFilters = () => {
+    const typeFilter = document.getElementById('line-monitoring-type-filter');
+    const idFilter = document.getElementById('line-monitoring-id-filter');
+    const itemInput = document.getElementById('line-monitoring-item-input');
+    const mapForm = document.getElementById('line-monitoring-map-form');
+    if(!typeFilter || !idFilter || !itemInput || !mapForm) return;
+
+    fillSelectOptions(typeFilter, getAllMachineTypes(), '-- Select Machine Type --');
+    fillSelectOptions(idFilter, [], '-- Select Machine Type Filter First --');
+    idFilter.disabled = true;
+
+    const syncItem = () => {
+      const machineId = (idFilter.value || '').trim();
+      const machineType = (typeFilter.value || '').trim();
+      itemInput.value = buildMonitoringItemValue(machineType, machineId);
+    };
+
+    typeFilter.addEventListener('change', () => {
+      const selectedType = (typeFilter.value || '').trim();
+      const hasType = selectedType.length > 0;
+      fillSelectOptions(
+        idFilter,
+        hasType ? getMachineIdsForType(selectedType) : [],
+        hasType ? '-- Select Machine ID (Optional) --' : '-- Select Machine Type Filter First --'
+      );
+      idFilter.disabled = !hasType;
+      syncItem();
+    });
+    idFilter.addEventListener('change', () => {
+      syncItem();
+    });
+    mapForm.addEventListener('submit', (event) => {
+      syncItem();
+      const machineType = (typeFilter.value || '').trim();
+      if(!machineType){
+        event.preventDefault();
+        alert('Please select Machine Type Filter before Add Mapping.');
+        return;
+      }
+      if(!(itemInput.value || '').trim()){
+        event.preventDefault();
+        alert('Please select Machine Type Filter before Add Mapping.');
+      }
+    });
+    syncItem();
+  };
+
+  initLineMonitoringFilters();
 
   const tables = document.querySelectorAll('.sortable-table');
   if(!tables.length) return;

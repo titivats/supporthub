@@ -7,6 +7,7 @@
     :root{
       --bg:#eef2f8;
       --card:#ffffff;
+      --soft-panel-bg:#f8fbff;
       --line:#dbe3ef;
       --line-strong:#c7d2e3;
       --text:#0f172a;
@@ -16,6 +17,12 @@
       --good:#16a34a;
       --warn:#f59e0b;
       --bad:#ef4444;
+      --chart-side:#edf2ff;
+      --chart-center:#ffffff;
+      --chart-grid:#d6e1f0;
+      --chart-axis:#5e708d;
+      --plot-fill:var(--soft-panel-bg);
+      --plot-stroke:#d7e2f1;
       --shadow:0 10px 28px rgba(15,23,42,.06);
     }
     *{box-sizing:border-box}
@@ -75,6 +82,7 @@
     }
 
     .filter-card{margin-top:12px;padding:14px 16px}
+    .line-filter-card{margin-top:12px;padding:12px 14px;background:var(--soft-panel-bg);border:1px solid #dbe5f1;border-radius:14px}
     .filter-title{
       margin:0 0 12px;
       color:#1e293b;
@@ -88,7 +96,13 @@
       gap:10px;
       align-items:end;
     }
-    .filters label{
+    .line-filters{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(190px,1fr)) minmax(170px,1fr) 28px minmax(170px,1fr) 140px 110px;
+      gap:10px;
+      align-items:end;
+    }
+    .filters label,.line-filters label{
       display:flex;
       flex-direction:column;
       gap:6px;
@@ -97,7 +111,7 @@
       font-weight:600;
       line-height:1.1;
     }
-    .filters select,.filters input{
+    .filters select,.filters input,.line-filters select,.line-filters input{
       width:100%;
       height:42px;
       padding:0 12px;
@@ -108,7 +122,7 @@
       font-size:14px;
       color:#0f172a;
     }
-    .filters .btn{
+    .filters .btn,.line-filters .btn{
       height:42px;
       padding:0 14px;
       justify-content:center;
@@ -123,23 +137,6 @@
       font-weight:600;
       line-height:1;
     }
-    .chips{
-      margin-top:10px;
-      padding:10px 12px;
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-    .chip{
-      border:1px solid var(--line);
-      background:#f8fbff;
-      padding:6px 11px;
-      border-radius:999px;
-      color:#334155;
-      font-size:12px;
-      font-weight:500;
-    }
-
     .layout{margin-top:14px;display:grid;grid-template-columns:minmax(360px,420px) 1fr;gap:14px}
     .panel{
       background:#fff;
@@ -219,6 +216,108 @@
     .meta .k{color:#64748b;font-size:12px}
     .meta .v{font-weight:600;font-size:14px}
 
+    .chart-panel{margin-top:14px}
+    .chart-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap}
+    .metric-switch{display:flex;gap:8px;flex-wrap:wrap}
+    .metric-btn{
+      min-height:34px;
+      padding:0 12px;
+      font-size:13px;
+      border-radius:10px;
+    }
+    .line-filter-btn{
+      min-height:34px;
+      padding:0 12px;
+      font-size:13px;
+      border-radius:10px;
+      font-weight:600;
+    }
+    .metric-btn.active{
+      background:var(--primary);
+      color:#fff;
+      border-color:var(--primary);
+      box-shadow:none;
+      transform:none;
+    }
+    .chart-meta{margin-top:4px;color:#64748b;font-size:12px}
+    .color-tools{
+      margin-top:10px;
+      border:1px solid #dbe5f1;
+      border-radius:12px;
+      background:var(--soft-panel-bg);
+      padding:10px 12px;
+    }
+    .color-tools-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      margin-bottom:8px;
+    }
+    .color-tools-title{
+      color:#1e293b;
+      font-size:12px;
+      font-weight:700;
+      letter-spacing:.01em;
+    }
+    .color-tools-reset{
+      min-height:30px;
+      height:30px;
+      padding:0 10px;
+      font-size:12px;
+      border-radius:9px;
+    }
+    .color-grid{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .color-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      border:1px solid #d3ddec;
+      background:#fff;
+      border-radius:999px;
+      padding:4px 9px 4px 5px;
+      color:#334155;
+      font-size:12px;
+      font-weight:600;
+      line-height:1;
+    }
+    .color-chip input[type="color"]{
+      width:24px;
+      height:24px;
+      border:none;
+      border-radius:8px;
+      padding:0;
+      background:transparent;
+      cursor:pointer;
+    }
+    .chart-stage{
+      margin-top:12px;
+      border:1px solid #dbe5f1;
+      border-radius:14px;
+      background:var(--soft-panel-bg);
+      overflow-x:hidden;
+      padding:8px 8px 2px;
+    }
+    .chart-svg{
+      display:block;
+      width:100%;
+      height:auto;
+      min-height:390px;
+    }
+    .bar-empty{
+      margin-top:10px;
+      border:1px dashed #cbd5e1;
+      border-radius:12px;
+      background:#f8fafc;
+      padding:12px;
+      color:#475569;
+      font-size:13px;
+    }
+
     .empty{
       margin-top:14px;
       border:1px dashed #cbd5e1;
@@ -233,6 +332,7 @@
     @media (max-width:1320px){
       .layout{grid-template-columns:1fr}
       .filters{grid-template-columns:repeat(2,minmax(200px,1fr))}
+      .line-filters{grid-template-columns:repeat(2,minmax(200px,1fr))}
       .to-sep{display:none}
     }
     @media (max-width:900px){
@@ -240,6 +340,7 @@
       .desc{font-size:13px}
       .hero{padding:14px}
       .filters{grid-template-columns:1fr}
+      .line-filters{grid-template-columns:1fr}
       .metrics-grid{grid-template-columns:1fr}
       .meta{grid-template-columns:1fr 1fr}
       .panel h2{font-size:22px}
@@ -265,19 +366,24 @@
   </div>
 
   <form class="card filter-card" method="get" action="/monitoring">
-    <p class="filter-title">Filter Criteria</p>
+    <p class="filter-title">Filter Criteria (OEE + Key Metrics)</p>
+    <input type="hidden" name="line_machine_type" value="{{ line_machine_type or '' }}">
+    <input type="hidden" name="line_machine_brand" value="{{ line_machine_brand or '' }}">
+    <input type="hidden" name="line_start_date" value="{{ line_start_date or '' }}">
+    <input type="hidden" name="line_end_date" value="{{ line_end_date or '' }}">
+    {% if line_applied %}<input type="hidden" name="line_apply" value="1">{% endif %}
     <div class="filters">
-      <label>Line No.
+      <label>Line Operate No.
         <select name="line_op">
           <option value="">All</option>
           {% for lo in line_ops %}
-            <option value="{{ lo }}" {% if line_op == lo %}selected{% endif %}>{{ lo }}</option>
+            <option value="{{ lo }}" {% if line_op == lo %}selected{% endif %}>{{ lo }}{% if lo|upper in ["BT01","BT02","BT03","BT04","BT05","BT06","BT07","BT08","BT09"] %}_W{% endif %}</option>
           {% endfor %}
         </select>
       </label>
 
       <label>Machine
-        <select id="machineTypeSelect" name="machine_type">
+        <select id="oeeMachineTypeSelect" name="machine_type">
           <option value="">All</option>
           {% for mt in machine_type_map.keys()|list|sort %}
             <option value="{{ mt }}" {% if machine_type == mt %}selected{% endif %}>{{ mt }}</option>
@@ -286,7 +392,7 @@
       </label>
 
       <label>Machine Type
-        <select id="machineBrandSelect" name="machine_brand" data-selected="{{ machine_brand }}">
+        <select id="oeeMachineBrandSelect" name="machine_brand" data-selected="{{ machine_brand }}">
           <option value="">All</option>
         </select>
       </label>
@@ -302,16 +408,9 @@
       </label>
 
       <button class="btn primary" type="submit" name="apply" value="1">Apply Filter</button>
-      <a class="btn" href="/monitoring">Clear</a>
+      <button class="btn" type="submit" name="clear_oee" value="1">Clear</button>
     </div>
   </form>
-
-  <div class="chips card">
-    <span class="chip">Line: {{ line_op or 'All' }}</span>
-    <span class="chip">Machine: {{ machine_type or 'All' }}</span>
-    <span class="chip">Machine Type: {{ machine_brand or 'All' }}</span>
-    <span class="chip">Date: {{ start_date or '-' }} to {{ end_date or '-' }}</span>
-  </div>
 
   {% if applied and metrics %}
   {% set tone = 'good' if metrics.is_on_target else ('warn' if metrics.oee_percent >= 50 else 'bad') %}
@@ -383,18 +482,110 @@
   </div>
   {% else %}
   <div class="empty">
-    Click <strong>Apply Filter</strong> to show OEE, Downtime, MTTR, and MTBF based on your selected criteria.
+    Click <strong>Apply Filter</strong> in <strong>Filter Criteria</strong> to show OEE and Key Metrics.
   </div>
   {% endif %}
+
+  <section class="panel chart-panel">
+    <div class="chart-head">
+      <div>
+        <h2 class="section-title">By Line Operate No.</h2>
+        <div class="chart-meta" id="lineChartMeta">Y-axis = %Downtime, Y2-axis = Hours, X-axis = Line Operate No. | Target &lt; 1%</div>
+      </div>
+      <div class="metric-switch" id="metricSwitch">
+        <button class="btn line-filter-btn" type="button" id="lineFilterBtn">Filter Line</button>
+        <button class="btn metric-btn active" type="button" data-metric="downtime_percent">%Downtime</button>
+        <button class="btn metric-btn" type="button" data-metric="oee_percent">OEE</button>
+        <button class="btn metric-btn" type="button" data-metric="mtbf_hours">MTBF</button>
+        <button class="btn metric-btn" type="button" data-metric="mttr_hours">MTTR</button>
+      </div>
+    </div>
+
+    <form id="lineFilterCard" class="line-filter-card" method="get" action="/monitoring">
+      <input type="hidden" name="line_op" value="{{ line_op or '' }}">
+      <input type="hidden" name="machine_type" value="{{ machine_type or '' }}">
+      <input type="hidden" name="machine_brand" value="{{ machine_brand or '' }}">
+      <input type="hidden" name="start_date" value="{{ start_date or '' }}">
+      <input type="hidden" name="end_date" value="{{ end_date or '' }}">
+      {% if applied %}<input type="hidden" name="apply" value="1">{% endif %}
+      <p class="filter-title">By Line Operate No. Filters</p>
+      <div class="line-filters">
+        <label>Machine
+          <select id="lineMachineTypeSelect" name="line_machine_type">
+            <option value="">All</option>
+            {% for mt in machine_type_map.keys()|list|sort %}
+              <option value="{{ mt }}" {% if line_machine_type == mt %}selected{% endif %}>{{ mt }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label>Machine Type
+          <select id="lineMachineBrandSelect" name="line_machine_brand" data-selected="{{ line_machine_brand }}">
+            <option value="">All</option>
+          </select>
+        </label>
+
+        <label>Date
+          <input type="date" name="line_start_date" value="{{ line_start_date or '' }}">
+        </label>
+
+        <div class="to-sep">to</div>
+
+        <label>
+          <input type="date" name="line_end_date" value="{{ line_end_date or '' }}">
+        </label>
+
+        <button class="btn primary" type="submit" name="line_apply" value="1">Apply Filter</button>
+        <button class="btn" type="submit" name="clear_line" value="1">Clear</button>
+      </div>
+    </form>
+
+    <div class="color-tools" id="machineColorTools" hidden>
+      <div class="color-tools-head">
+        <div class="color-tools-title">Machine Color Picker</div>
+        <button class="btn color-tools-reset" type="button" id="machineColorReset">Reset Colors</button>
+      </div>
+      <div class="color-grid" id="machineColorGrid"></div>
+    </div>
+
+    <div id="lineBarChart" class="chart-stage"></div>
+  </section>
 </div>
 
+<script id="lineMetricsData" type="application/json">{{ line_metrics | tojson }}</script>
+<script id="lineAppliedData" type="application/json">{{ line_applied | tojson }}</script>
 <script>
   const machineTypeMap = {{ machine_type_map | tojson }};
-  const typeSelect = document.getElementById("machineTypeSelect");
-  const brandSelect = document.getElementById("machineBrandSelect");
-  const initialBrand = brandSelect?.dataset.selected || "";
+  const oeeTypeSelect = document.getElementById("oeeMachineTypeSelect");
+  const oeeBrandSelect = document.getElementById("oeeMachineBrandSelect");
+  const lineTypeSelect = document.getElementById("lineMachineTypeSelect");
+  const lineBrandSelect = document.getElementById("lineMachineBrandSelect");
+  const lineMetricsNode = document.getElementById("lineMetricsData");
+  const lineAppliedNode = document.getElementById("lineAppliedData");
+  const lineBarChart = document.getElementById("lineBarChart");
+  const lineChartMeta = document.getElementById("lineChartMeta");
+  const metricSwitch = document.getElementById("metricSwitch");
+  const lineFilterBtn = document.getElementById("lineFilterBtn");
+  const lineFilterCard = document.getElementById("lineFilterCard");
+  const machineColorTools = document.getElementById("machineColorTools");
+  const machineColorGrid = document.getElementById("machineColorGrid");
+  const machineColorReset = document.getElementById("machineColorReset");
 
-  function fillBrands(selectedBrand) {
+  let lineMetrics = [];
+  try {
+    lineMetrics = JSON.parse(lineMetricsNode?.textContent || "[]");
+    if (!Array.isArray(lineMetrics)) lineMetrics = [];
+  } catch (_) {
+    lineMetrics = [];
+  }
+  let lineApplied = false;
+  try {
+    lineApplied = JSON.parse(lineAppliedNode?.textContent || "false") === true;
+  } catch (_) {
+    lineApplied = false;
+  }
+
+  function fillBrands(typeSelect, brandSelect, selectedBrand) {
     if (!typeSelect || !brandSelect) return;
     const typeVal = (typeSelect.value || "").trim();
     const list = typeVal ? (machineTypeMap[typeVal] || []) : [];
@@ -417,17 +608,423 @@
     }
   }
 
-  fillBrands(initialBrand);
-  if (typeSelect) {
-    typeSelect.addEventListener("change", () => fillBrands(""));
+  function bindMachineBrandFilter(typeSelect, brandSelect){
+    if (!typeSelect || !brandSelect) return;
+    fillBrands(typeSelect, brandSelect, brandSelect.dataset.selected || "");
+    typeSelect.addEventListener("change", () => fillBrands(typeSelect, brandSelect, ""));
   }
 
-  function goBack(){
-    if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      window.location.href = "/";
+  bindMachineBrandFilter(oeeTypeSelect, oeeBrandSelect);
+  bindMachineBrandFilter(lineTypeSelect, lineBrandSelect);
+
+  function escapeSvg(value){
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+  function formatLineOperateName(rawLine){
+    const lineVal = String(rawLine || "").trim();
+    const upper = lineVal.toUpperCase();
+    if (/^BT0[1-9]$/.test(upper)) return `${upper}_W`;
+    return lineVal;
+  }
+  function formatHourTick(value){
+    const n = Number(value || 0);
+    if (!Number.isFinite(n)) return "0 h";
+    if (Math.abs(n) >= 100) return `${n.toFixed(0)} h`;
+    if (Math.abs(n) >= 10) return `${n.toFixed(1)} h`;
+    return `${n.toFixed(2)} h`;
+  }
+
+  const metricConfig = {
+    downtime_percent: {
+      key: "downtime_percent",
+      axis: "Y-axis = %Downtime, Y2-axis = Hours, X-axis = Line Operate No.",
+      yAxisLabel: "Downtime (%)",
+      format: (v) => `${v.toFixed(2)}%`,
+      tickFormat: (v) => `${v.toFixed(v < 10 ? 1 : 0)}%`,
+      hoursKey: "downtime_hours",
+      rightAxisLabel: "Hours",
+      target: 1,
+      targetLabel: "Target < 1%",
+    },
+    oee_percent: {
+      key: "oee_percent",
+      axis: "Y-axis = OEE (%), Y2-axis = Hours, X-axis = Line Operate No.",
+      yAxisLabel: "OEE (%)",
+      format: (v) => `${v.toFixed(2)}%`,
+      tickFormat: (v) => `${v.toFixed(0)}%`,
+      hoursKey: "uptime_hours",
+      rightAxisLabel: "Hours",
+      target: 85,
+      targetLabel: "Target > 85%",
+    },
+    mtbf_hours: {
+      key: "mtbf_hours",
+      axis: "Y-axis = MTBF (hours), Y2-axis = Hours, X-axis = Line Operate No.",
+      yAxisLabel: "MTBF (hours)",
+      format: (v) => `${v.toFixed(2)} h`,
+      tickFormat: (v) => `${v.toFixed(0)} h`,
+      hoursKey: "mtbf_hours",
+      rightAxisLabel: "Hours",
+      target: 1000,
+      targetLabel: "Target > 1000 hrs",
+    },
+    mttr_hours: {
+      key: "mttr_hours",
+      axis: "Y-axis = MTTR (hours), Y2-axis = Hours, X-axis = Line Operate No.",
+      yAxisLabel: "MTTR (hours)",
+      format: (v) => `${v.toFixed(2)} h`,
+      tickFormat: (v) => `${v.toFixed(v < 10 ? 1 : 0)} h`,
+      hoursKey: "mttr_hours",
+      rightAxisLabel: "Hours",
+      target: 4,
+      targetLabel: "Target < 4 hrs",
+    },
+  };
+  const cssVar = (name, fallback) => (getComputedStyle(document.documentElement).getPropertyValue(name) || "").trim() || fallback;
+  const MACHINE_COLOR_STORAGE_KEY = "supporthub_monitoring_machine_colors_v1";
+  const chartPalette = {
+    grid: cssVar("--chart-grid", "#d6e1f0"),
+    axis: cssVar("--chart-axis", "#5e708d"),
+    plotFill: cssVar("--plot-fill", "#f8fbff"),
+    plotStroke: cssVar("--plot-stroke", "#d7e2f1"),
+    machinePalette: ["#2563eb", "#0891b2", "#16a34a", "#d97706", "#7c3aed", "#db2777", "#ea580c", "#0f766e", "#1d4ed8", "#0ea5e9"],
+    lineSummary: "#1e3f94",
+    valueText: "#1e3a5f",
+    itemText: "#334155",
+    groupText: "#0f172a",
+    targetLine: "#c83d3d",
+    targetText: "#b91c1c",
+  };
+  // Default machine colors (optional).
+  // Example: "ERSA VERSAFLOW": "#2563eb"
+  const defaultMachineColorOverrides = {
+  };
+  let machineColorOverrides = {};
+  const machineColorCache = new Map();
+  let currentMetricKey = "downtime_percent";
+  const normalizeMachineKey = (name) => String(name || "").trim().toLowerCase();
+  function buildDefaultMachineColorOverrides(){
+    const out = {};
+    Object.entries(defaultMachineColorOverrides || {}).forEach(([k, v]) => {
+      const key = normalizeMachineKey(k);
+      if(key && typeof v === "string" && v.trim()) out[key] = v.trim();
+    });
+    return out;
+  }
+  function loadMachineColorOverrides(){
+    let loaded = {};
+    try{
+      const raw = localStorage.getItem(MACHINE_COLOR_STORAGE_KEY) || "{}";
+      const parsed = JSON.parse(raw);
+      if(parsed && typeof parsed === "object") loaded = parsed;
+    }catch(_){
+      loaded = {};
     }
+    const out = buildDefaultMachineColorOverrides();
+    Object.entries(loaded || {}).forEach(([k, v]) => {
+      const key = normalizeMachineKey(k);
+      if(key && typeof v === "string" && v.trim()) out[key] = v.trim();
+    });
+    return out;
+  }
+  function saveMachineColorOverrides(){
+    try{
+      localStorage.setItem(MACHINE_COLOR_STORAGE_KEY, JSON.stringify(machineColorOverrides || {}));
+    }catch(_){
+      // ignore localStorage errors
+    }
+  }
+  machineColorOverrides = loadMachineColorOverrides();
+  function hashText(text){
+    let hash = 0;
+    const src = String(text || "");
+    for(let i = 0; i < src.length; i += 1){
+      hash = ((hash << 5) - hash) + src.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash);
+  }
+  function pickMachineColor(name){
+    const raw = String(name || "").trim();
+    const key = normalizeMachineKey(raw) || "_default";
+    if(machineColorOverrides[key]){
+      return machineColorOverrides[key];
+    }
+    if(machineColorCache.has(key)) return machineColorCache.get(key);
+    const idx = hashText(key) % chartPalette.machinePalette.length;
+    const color = chartPalette.machinePalette[idx];
+    machineColorCache.set(key, color);
+    return color;
+  }
+  function toDisplayItemLabel(rawName, parentLine){
+    const source = String(rawName || "").trim();
+    const parent = String(parentLine || "").trim();
+    if(!source) return "";
+    const linePrefix = parent ? `${parent} - ` : "";
+    return linePrefix && source.startsWith(linePrefix) ? source.slice(linePrefix.length) : source;
+  }
+  function getMachineColorItems(){
+    const names = new Set();
+    (lineMetrics || []).forEach((item) => {
+      if(!(item?.is_item_breakdown === true)) return;
+      const parentLine = String(item?.line_parent || item?.line_op || "-");
+      const name = toDisplayItemLabel(String(item?.line_op || ""), parentLine);
+      const trimmed = String(name || "").trim();
+      if(trimmed) names.add(trimmed);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, undefined, { sensitivity:"base", numeric:true }));
+  }
+  function renderMachineColorTools(){
+    if(!machineColorTools || !machineColorGrid) return;
+    const items = lineApplied ? getMachineColorItems() : [];
+    if(!items.length){
+      machineColorTools.hidden = true;
+      machineColorGrid.innerHTML = "";
+      return;
+    }
+    machineColorTools.hidden = false;
+    machineColorGrid.innerHTML = "";
+    items.forEach((name) => {
+      const chip = document.createElement("label");
+      chip.className = "color-chip";
+      const picker = document.createElement("input");
+      picker.type = "color";
+      picker.value = pickMachineColor(name);
+      picker.addEventListener("change", () => {
+        const key = normalizeMachineKey(name);
+        if(!key) return;
+        machineColorOverrides[key] = picker.value;
+        machineColorCache.set(key, picker.value);
+        saveMachineColorOverrides();
+        renderLineChart(currentMetricKey);
+      });
+      const text = document.createElement("span");
+      text.textContent = name;
+      chip.appendChild(picker);
+      chip.appendChild(text);
+      machineColorGrid.appendChild(chip);
+    });
+  }
+  if(machineColorReset){
+    machineColorReset.addEventListener("click", () => {
+      machineColorOverrides = buildDefaultMachineColorOverrides();
+      machineColorCache.clear();
+      saveMachineColorOverrides();
+      renderMachineColorTools();
+      renderLineChart(currentMetricKey);
+    });
+  }
+
+  function niceStep(maxValue){
+    if (!Number.isFinite(maxValue) || maxValue <= 0) return 1;
+    const rough = maxValue / 5;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(rough)));
+    const residual = rough / magnitude;
+    if (residual <= 1) return 1 * magnitude;
+    if (residual <= 2) return 2 * magnitude;
+    if (residual <= 5) return 5 * magnitude;
+    return 10 * magnitude;
+  }
+
+  function renderLineChart(metricKey){
+    if (!lineBarChart) return;
+    currentMetricKey = metricKey || currentMetricKey;
+    renderMachineColorTools();
+    const cfg = metricConfig[metricKey] || metricConfig.downtime_percent;
+
+    if (!lineApplied){
+      lineBarChart.innerHTML = '<div class="bar-empty">Click <strong>Apply Filter</strong> in By Line Operate No. Filters to show chart.</div>';
+      if (lineChartMeta) lineChartMeta.textContent = `${cfg.axis} | ${cfg.targetLabel}`;
+      return;
+    }
+
+    if (!lineMetrics.length){
+      lineBarChart.innerHTML = '<div class="bar-empty">No filtered line data available.</div>';
+      if (lineChartMeta) lineChartMeta.textContent = `${cfg.axis} | ${cfg.targetLabel}`;
+      return;
+    }
+
+    const groups = [];
+    const groupMap = new Map();
+    lineMetrics.forEach((item) => {
+      const parentLine = String(item?.line_parent || item?.line_op || "-");
+      const raw = Number(item?.[cfg.key] || 0);
+      const value = Number.isFinite(raw) ? raw : 0;
+      const hoursRaw = Number(item?.[cfg.hoursKey] || (cfg.key.endsWith("_hours") ? value : 0));
+      const hoursValue = Number.isFinite(hoursRaw) ? hoursRaw : 0;
+      const isBreakdown = item?.is_item_breakdown === true;
+      const barName = isBreakdown ? String(item?.line_op || "Item") : "Total";
+
+      let group = groupMap.get(parentLine);
+      if (!group) {
+        group = { line: parentLine, bars: [] };
+        groupMap.set(parentLine, group);
+        groups.push(group);
+      }
+      group.bars.push({ name: barName, value, hours: hoursValue, isBreakdown });
+    });
+    groups.forEach((group) => {
+      const breakdownBars = (group.bars || []).filter((bar) => bar.isBreakdown);
+      if (breakdownBars.length > 0) {
+        group.bars = breakdownBars;
+      }
+    });
+    if (!groups.length) {
+      lineBarChart.innerHTML = '<div class="bar-empty">No filtered line data available.</div>';
+      if (lineChartMeta) lineChartMeta.textContent = `${cfg.axis} | ${cfg.targetLabel}`;
+      return;
+    }
+
+    const allValues = groups.flatMap((g) => g.bars.map((b) => b.value));
+    const hasBreakdown = groups.some((g) => g.bars.length > 1);
+
+    const targetValue = Number(cfg.target || 0);
+    const valueMax = Math.max(...allValues, targetValue, 0);
+    const step = niceStep(valueMax || 1);
+    let yMax = Math.ceil(valueMax / step) * step;
+    if (!Number.isFinite(yMax) || yMax <= 0) yMax = step;
+    if (Math.abs(yMax - valueMax) < 1e-9) yMax += step;
+    const tickCount = Math.max(3, Math.round(yMax / step));
+
+    const pad = { top: 28, right: 90, bottom: hasBreakdown ? 178 : 128, left: 76 };
+    const stageWidth = (lineBarChart?.clientWidth || lineBarChart?.offsetWidth || 0);
+    const usableStageWidth = Math.max(260, stageWidth - 16);
+    const width = stageWidth > 0 ? usableStageWidth : 940;
+    const height = hasBreakdown ? 500 : 440;
+    const plotWidth = width - pad.left - pad.right;
+    const plotHeight = height - pad.top - pad.bottom;
+    const plotBottom = pad.top + plotHeight;
+
+    const yFromValue = (v) => pad.top + plotHeight - (Math.max(v, 0) / yMax) * plotHeight;
+    const slotWidth = plotWidth / groups.length;
+    const maxBarsInGroup = Math.max(...groups.map((g) => g.bars.length), 1);
+    const barGap = maxBarsInGroup > 1 ? 10 : 0;
+    const clusterWidthRatio = hasBreakdown ? 0.74 : 0.58;
+    const maxClusterWidth = slotWidth * clusterWidthRatio;
+    const computedBarWidth = (maxClusterWidth - barGap * (maxBarsInGroup - 1)) / maxBarsInGroup;
+    const maxBarWidth = hasBreakdown ? 34 : 28;
+    const minBarWidth = hasBreakdown ? 8 : 6;
+    const barWidth = Math.min(maxBarWidth, Math.max(minBarWidth, computedBarWidth));
+
+    const hourValues = groups.flatMap((g) => g.bars.map((b) => Number(b.hours || 0)));
+    const rightAxisMaxRaw = cfg.key.endsWith("_hours") ? yMax : Math.max(...hourValues, 0);
+    const rightAxisMax = Number.isFinite(rightAxisMaxRaw) && rightAxisMaxRaw > 0 ? rightAxisMaxRaw : 1;
+
+    const gridParts = [];
+    for (let i = 0; i <= tickCount; i += 1) {
+      const tickValue = i * step;
+      const y = yFromValue(tickValue);
+      const rightValue = cfg.key.endsWith("_hours")
+        ? tickValue
+        : ((tickValue / yMax) * rightAxisMax);
+      gridParts.push(`<line x1="${pad.left}" y1="${y}" x2="${pad.left + plotWidth}" y2="${y}" stroke="${chartPalette.grid}" stroke-width="1"/>`);
+      gridParts.push(
+        `<text x="${pad.left - 10}" y="${y + 4}" text-anchor="end" font-size="12" fill="${chartPalette.axis}">${escapeSvg(cfg.tickFormat(tickValue))}</text>`
+      );
+      gridParts.push(
+        `<text x="${pad.left + plotWidth + 10}" y="${y + 4}" text-anchor="start" font-size="12" fill="${chartPalette.axis}">${escapeSvg(formatHourTick(rightValue))}</text>`
+      );
+    }
+
+    const clampedTarget = Math.max(0, Math.min(targetValue, yMax));
+    const targetY = yFromValue(clampedTarget);
+
+    const barParts = groups.map((group, groupIdx) => {
+      const bars = group.bars || [];
+      const clusterWidth = bars.length * barWidth + Math.max(0, bars.length - 1) * barGap;
+      const clusterStart = pad.left + slotWidth * groupIdx + (slotWidth - clusterWidth) / 2;
+      const groupCenterX = clusterStart + clusterWidth / 2;
+      const lineDisplay = formatLineOperateName(group.line);
+      const groupLabel = lineDisplay.length > 14 ? `${lineDisplay.slice(0, 14)}...` : lineDisplay;
+      const groupBars = bars.map((bar, barIdx) => {
+        const x = clusterStart + barIdx * (barWidth + barGap);
+        const y = yFromValue(bar.value);
+        const barHeight = Math.max(plotBottom - y, 0);
+        const adjustedHeight = bar.value > 0 ? Math.max(barHeight, 1.5) : 0;
+        const adjustedY = plotBottom - adjustedHeight;
+        const valueText = cfg.format(bar.value);
+        const rawName = String(bar.name || "");
+        const itemLabelRaw = toDisplayItemLabel(rawName, group.line);
+        const itemLabel = itemLabelRaw;
+        const showItemLabel = hasBreakdown;
+        const fillColor = bar.isBreakdown ? pickMachineColor(itemLabelRaw) : chartPalette.lineSummary;
+        return `
+          <g>
+            <title>${escapeSvg(lineDisplay)} / ${escapeSvg(itemLabelRaw)}: ${escapeSvg(valueText)}</title>
+            <rect x="${x}" y="${adjustedY}" width="${barWidth}" height="${adjustedHeight}" rx="6" fill="${fillColor}"></rect>
+            <text x="${x + barWidth / 2}" y="${Math.max(adjustedY - 6, pad.top + 12)}" text-anchor="middle" font-size="12" font-weight="600" fill="${chartPalette.valueText}">${escapeSvg(valueText)}</text>
+            ${showItemLabel ? `<text x="${x + barWidth / 2}" y="${plotBottom + 24}" text-anchor="end" transform="rotate(-45 ${x + barWidth / 2} ${plotBottom + 24})" font-size="11" font-weight="600" fill="${chartPalette.itemText}">${escapeSvg(itemLabel)}</text>` : ""}
+          </g>
+        `;
+      }).join("");
+      const groupLabelY = hasBreakdown ? (plotBottom + 128) : (plotBottom + 78);
+      return `
+        <g>
+          ${groupBars}
+          <text x="${groupCenterX}" y="${groupLabelY}" text-anchor="middle" font-size="12" font-weight="700" fill="${chartPalette.groupText}">${escapeSvg(groupLabel)}</text>
+        </g>
+      `;
+    }).join("");
+
+    const svg = `
+      <svg class="chart-svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Line metric chart">
+        <rect x="${pad.left}" y="${pad.top}" width="${plotWidth}" height="${plotHeight}" rx="10" fill="${chartPalette.plotFill}" stroke="${chartPalette.plotStroke}"></rect>
+        ${gridParts.join("")}
+        <line x1="${pad.left}" y1="${plotBottom}" x2="${pad.left + plotWidth}" y2="${plotBottom}" stroke="${chartPalette.axis}" stroke-width="1.5"></line>
+        <line x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${plotBottom}" stroke="${chartPalette.axis}" stroke-width="1.5"></line>
+        <line x1="${pad.left + plotWidth}" y1="${pad.top}" x2="${pad.left + plotWidth}" y2="${plotBottom}" stroke="${chartPalette.axis}" stroke-width="1.5"></line>
+        ${barParts}
+        <line x1="${pad.left}" y1="${targetY}" x2="${pad.left + plotWidth}" y2="${targetY}" stroke="${chartPalette.targetLine}" stroke-width="2.6" stroke-dasharray="7 5" stroke-linecap="round"></line>
+        <text x="${pad.left + plotWidth - 4}" y="${Math.max(targetY - 8, pad.top + 12)}" text-anchor="end" font-size="12" font-weight="700" fill="${chartPalette.targetText}">${escapeSvg(cfg.targetLabel)}</text>
+        <text x="${pad.left + plotWidth / 2}" y="${height - 16}" text-anchor="middle" font-size="13" font-weight="700" fill="${chartPalette.itemText}">Line Operate No.</text>
+        <text x="22" y="${pad.top + plotHeight / 2}" text-anchor="middle" transform="rotate(-90 22 ${pad.top + plotHeight / 2})" font-size="13" font-weight="700" fill="${chartPalette.itemText}">${escapeSvg(cfg.yAxisLabel)}</text>
+        <text x="${width - 22}" y="${pad.top + plotHeight / 2}" text-anchor="middle" transform="rotate(90 ${width - 22} ${pad.top + plotHeight / 2})" font-size="13" font-weight="700" fill="${chartPalette.itemText}">${escapeSvg(cfg.rightAxisLabel || "Hours")}</text>
+      </svg>
+    `;
+    lineBarChart.innerHTML = svg;
+
+    if (lineChartMeta) lineChartMeta.textContent = `${cfg.axis} | ${cfg.targetLabel}`;
+  }
+
+  if (metricSwitch && lineBarChart){
+    const buttons = Array.from(metricSwitch.querySelectorAll(".metric-btn"));
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        buttons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        renderLineChart(btn.dataset.metric || "downtime_percent");
+      });
+    });
+    renderLineChart("downtime_percent");
+  }
+  if (lineFilterBtn && lineFilterCard){
+    lineFilterBtn.addEventListener("click", () => {
+      lineFilterCard.scrollIntoView({ behavior:"smooth", block:"center" });
+      const firstField = lineFilterCard.querySelector("select, input");
+      if (firstField) {
+        try {
+          firstField.focus({ preventScroll:true });
+        } catch (_) {
+          firstField.focus();
+        }
+      }
+    });
+  }
+  let lineChartResizeTimer = null;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(lineChartResizeTimer);
+    lineChartResizeTimer = window.setTimeout(() => {
+      renderLineChart(currentMetricKey);
+    }, 120);
+  });
+
+  function goBack(){
+    window.location.href = "/";
   }
 </script>
 </body>

@@ -14,21 +14,27 @@ DATABASE_URL = os.getenv(
     f"sqlite:///{DEFAULT_DB_PATH.replace(os.sep, '/')}",
 )
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+IS_SQLITE = DATABASE_URL.lower().startswith("sqlite")
+engine_kwargs = {"pool_pre_ping": True}
+if IS_SQLITE:
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 
 
-@event.listens_for(engine, "connect")
-def set_sqlite_pragma(dbapi_conn, connection_record):
-    cursor = dbapi_conn.cursor()
-    try:
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.execute("PRAGMA busy_timeout=5000")
-        cursor.execute("PRAGMA foreign_keys=ON")
-    finally:
-        cursor.close()
+if IS_SQLITE:
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
 
 
 class User(Base):
@@ -208,32 +214,193 @@ def get_db():
 
 
 def _ensure_columns_and_indexes() -> None:
-    with engine.connect() as con:
-        cols = {row[1] for row in con.exec_driver_sql("PRAGMA table_info(tickets)").fetchall()}
-        need = {
-            "equipment": "TEXT",
-            "machine_id": "TEXT",
-            "problem": "TEXT",
-            "status": "TEXT DEFAULT 'PENDING'",
-            "doing_started_at": "DATETIME",
-            "hold_started_at": "DATETIME",
-            "doing_secs": "INTEGER DEFAULT 0",
-            "hold_secs": "INTEGER DEFAULT 0",
-            "current_actor": "TEXT",
-            "last_action": "TEXT",
-            "hold_reason": "TEXT",
-            "solution": "TEXT",
-            "done_by": "TEXT",
-            "cancel_reason": "TEXT",
-            "canceled_by": "TEXT",
-        }
-        for column_name, column_type in need.items():
-            if column_name not in cols:
-                con.exec_driver_sql(f"ALTER TABLE tickets ADD COLUMN {column_name} {column_type}")
+    with engine.begin() as con:
+        if engine.dialect.name == "sqlite":
+            cols = {row[1] for row in con.exec_driver_sql("PRAGMA table_info(tickets)").fetchall()}
+            need = {
+                "equipment": "TEXT",
+                "machine_id": "TEXT",
+                "problem": "TEXT",
+                "status": "TEXT DEFAULT 'PENDING'",
+                "doing_started_at": "DATETIME",
+                "hold_started_at": "DATETIME",
+                "doing_secs": "INTEGER DEFAULT 0",
+                "hold_secs": "INTEGER DEFAULT 0",
+                "current_actor": "TEXT",
+                "last_action": "TEXT",
+                "hold_reason": "TEXT",
+                "solution": "TEXT",
+                "done_by": "TEXT",
+                "cancel_reason": "TEXT",
+                "canceled_by": "TEXT",
+            }
+            for column_name, column_type in need.items():
+                if column_name not in cols:
+                    con.exec_driver_sql(f"ALTER TABLE tickets ADD COLUMN {column_name} {column_type}")
+
         con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status)")
         con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(closed_at)")
         con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_machine ON tickets(machine)")
         con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_machine_id ON tickets(machine_id)")
+
+
+def _ensure_postgres_history_view() -> None:
+    if engine.dialect.name != "postgresql":
+        return
+
+    sql = """
+    DROP VIEW IF EXISTS public.v_history_log;
+    CREATE VIEW public.v_history_log AS
+    WITH takeover AS (
+        SELECT
+            l.ticket_id,
+            string_agg(
+                to_char(l.created_at + interval '7 hour', 'YYYY-MM-DD HH24:MI:SS')
+                || ' | ' || coalesce(l.from_actor, '-')
+                || ' -> ' || coalesce(l.to_actor, '-'),
+                E'\\n'
+                ORDER BY l.created_at, l.id
+            ) AS takeover_log
+        FROM ticket_takeover_logs l
+        GROUP BY l.ticket_id
+    ),
+    brand_map AS (
+        SELECT lower(mt.machine_type) AS key_name, min(mt.machine) AS machine_name
+        FROM master_machine_types mt
+        GROUP BY lower(mt.machine_type)
+    ),
+    machine_map AS (
+        SELECT lower(mt.machine) AS key_name, min(mt.machine) AS machine_name
+        FROM master_machine_types mt
+        GROUP BY lower(mt.machine)
+    )
+    SELECT
+        t.id AS "ID",
+        t.status AS "Status",
+        to_char(t.created_at + interval '7 hour', 'YYYY-MM-DD HH24:MI:SS') AS "Created (TH)",
+        CASE
+            WHEN t.closed_at IS NULL THEN '-'
+            ELSE to_char(t.closed_at + interval '7 hour', 'YYYY-MM-DD HH24:MI:SS')
+        END AS "Closed (TH)",
+        t.requester AS "Request by",
+        t.machine AS "Line No.",
+        CASE
+            WHEN position('||' in coalesce(t.equipment, '')) > 0
+                THEN nullif(trim(split_part(t.equipment, '||', 1)), '')
+            WHEN lower(coalesce(t.equipment, '')) = 'other m/c or tools'
+                THEN 'Etc..'
+            ELSE coalesce(mm.machine_name, bm.machine_name, '')
+        END AS "Machine",
+        CASE
+            WHEN position('||' in coalesce(t.equipment, '')) > 0
+                THEN nullif(trim(split_part(t.equipment, '||', 2)), '')
+            ELSE coalesce(nullif(trim(t.equipment), ''), '')
+        END AS "Machine Type",
+        coalesce(t.machine_id, '-') AS "Machine ID",
+        coalesce(t.problem, '') AS "Problem",
+        coalesce(t.description, '-') AS "Description",
+        lpad((dur.doing_secs / 3600)::text, 2, '0') || ':' ||
+        lpad(((mod(dur.doing_secs, 3600)) / 60)::text, 2, '0') || ':' ||
+        lpad((mod(dur.doing_secs, 60))::text, 2, '0') AS "Doing",
+        lpad((dur.hold_secs / 3600)::text, 2, '0') || ':' ||
+        lpad(((mod(dur.hold_secs, 3600)) / 60)::text, 2, '0') || ':' ||
+        lpad((mod(dur.hold_secs, 60))::text, 2, '0') AS "Hold",
+        coalesce(t.hold_reason, '-') AS "Hold Reason",
+        lpad((dur.wait_secs / 3600)::text, 2, '0') || ':' ||
+        lpad(((mod(dur.wait_secs, 3600)) / 60)::text, 2, '0') || ':' ||
+        lpad((mod(dur.wait_secs, 60))::text, 2, '0') AS "Waiting Time",
+        lpad((dur.sum_secs / 3600)::text, 2, '0') || ':' ||
+        lpad(((mod(dur.sum_secs, 3600)) / 60)::text, 2, '0') || ':' ||
+        lpad((mod(dur.sum_secs, 60))::text, 2, '0') AS "Downtime",
+        coalesce(t.solution, '-') AS "Solution",
+        coalesce(t.cancel_reason, '-') AS "Cancel Reason",
+        coalesce(tk.takeover_log, '-') AS "Takeover Log",
+        CASE
+            WHEN t.status = 'DONE' THEN coalesce(t.done_by, '-')
+            WHEN t.status = 'CANCELLED' THEN coalesce(t.canceled_by, '-')
+            ELSE '-'
+        END AS "Done By"
+    FROM tickets t
+    LEFT JOIN brand_map bm
+        ON bm.key_name = lower(coalesce(t.equipment, ''))
+    LEFT JOIN machine_map mm
+        ON mm.key_name = lower(coalesce(t.equipment, ''))
+    LEFT JOIN takeover tk
+        ON tk.ticket_id = t.id
+    LEFT JOIN LATERAL (
+        SELECT
+            greatest(coalesce(t.doing_secs, 0), 0) AS doing_secs,
+            greatest(coalesce(t.hold_secs, 0), 0) AS hold_secs,
+            greatest(
+                coalesce(extract(epoch FROM (coalesce(t.closed_at, t.created_at) - t.created_at))::int, 0),
+                0
+            ) AS sum_secs,
+            greatest(
+                coalesce(extract(epoch FROM (coalesce(t.closed_at, t.created_at) - t.created_at))::int, 0)
+                - greatest(coalesce(t.doing_secs, 0), 0)
+                - greatest(coalesce(t.hold_secs, 0), 0),
+                0
+            ) AS wait_secs
+    ) dur ON true
+    ORDER BY t.id DESC;
+    """
+    with engine.begin() as con:
+        con.exec_driver_sql(sql)
+
+
+def _ensure_postgres_history_table() -> None:
+    if engine.dialect.name != "postgresql":
+        return
+
+    with engine.begin() as con:
+        con.exec_driver_sql("DROP TABLE IF EXISTS public.history_log_table")
+        con.exec_driver_sql(
+            "CREATE TABLE public.history_log_table AS "
+            "SELECT * FROM public.v_history_log WITH NO DATA"
+        )
+        con.exec_driver_sql(
+            "INSERT INTO public.history_log_table "
+            "SELECT * FROM public.v_history_log"
+        )
+        con.exec_driver_sql(
+            """
+            CREATE OR REPLACE FUNCTION public.refresh_history_log_table()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                TRUNCATE TABLE public.history_log_table;
+                INSERT INTO public.history_log_table
+                SELECT * FROM public.v_history_log;
+                RETURN NULL;
+            END;
+            $$;
+            """
+        )
+        con.exec_driver_sql(
+            "DROP TRIGGER IF EXISTS trg_refresh_history_log_table_tickets ON public.tickets"
+        )
+        con.exec_driver_sql(
+            """
+            CREATE TRIGGER trg_refresh_history_log_table_tickets
+            AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE
+            ON public.tickets
+            FOR EACH STATEMENT
+            EXECUTE FUNCTION public.refresh_history_log_table()
+            """
+        )
+        con.exec_driver_sql(
+            "DROP TRIGGER IF EXISTS trg_refresh_history_log_table_takeover ON public.ticket_takeover_logs"
+        )
+        con.exec_driver_sql(
+            """
+            CREATE TRIGGER trg_refresh_history_log_table_takeover
+            AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE
+            ON public.ticket_takeover_logs
+            FOR EACH STATEMENT
+            EXECUTE FUNCTION public.refresh_history_log_table()
+            """
+        )
 
 
 def _ensure_admin_user() -> None:
@@ -267,4 +434,6 @@ def _ensure_admin_user() -> None:
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_columns_and_indexes()
+    _ensure_postgres_history_view()
+    _ensure_postgres_history_table()
     _ensure_admin_user()

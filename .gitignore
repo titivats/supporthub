@@ -13,6 +13,7 @@ wheels/
 
 *.log
 127.0.0.1
+supporthub.local.bat
 
 *.db
 *.db-wal
