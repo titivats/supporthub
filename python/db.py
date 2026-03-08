@@ -264,7 +264,7 @@ def _ensure_postgres_history_view() -> None:
         SELECT
             l.ticket_id,
             string_agg(
-                to_char(l.created_at + interval '7 hour', 'YYYY-MM-DD HH24:MI:SS')
+                to_char(l.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS')
                 || ' | ' || coalesce(l.from_actor, '-')
                 || ' -> ' || coalesce(l.to_actor, '-'),
                 E'\\n'
@@ -286,10 +286,10 @@ def _ensure_postgres_history_view() -> None:
     SELECT
         t.id AS "ID",
         t.status AS "Status",
-        to_char(t.created_at + interval '7 hour', 'YYYY-MM-DD HH24:MI:SS') AS "Created (TH)",
+        to_char(t.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created (TH)",
         CASE
             WHEN t.closed_at IS NULL THEN '-'
-            ELSE to_char(t.closed_at + interval '7 hour', 'YYYY-MM-DD HH24:MI:SS')
+            ELSE to_char(t.closed_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS')
         END AS "Closed (TH)",
         t.requester AS "Request by",
         t.machine AS "Line No.",
