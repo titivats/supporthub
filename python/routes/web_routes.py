@@ -388,7 +388,7 @@ def register_web_routes(app, templates, deps):
         status = request.query_params.get("status", "")
         rows = _get_master_rows_sorted(db, "desc")
     
-        return templates.TemplateResponse("manage_machines.html", {
+        return templates.TemplateResponse("add_machine.html", {
             "request": request,
             "me": me,
             "line_rows": rows["line_rows"],
@@ -1153,9 +1153,15 @@ def register_web_routes(app, templates, deps):
     
         actor = db.query(User).filter(User.username == actor_username).first()
         if not actor:
-            raise HTTPException(status_code=404, detail="à¹„à¸¡à¹ˆà¸žà¸šà¸œà¸¹à¹‰à¹ƒà¸Šà¹‰à¸—à¸µà¹ˆà¸£à¸°à¸šà¸¸")
+            raise HTTPException(
+                status_code=404,
+                detail="\u0e44\u0e21\u0e48\u0e1e\u0e1a\u0e1c\u0e39\u0e49\u0e43\u0e0a\u0e49\u0e17\u0e35\u0e48\u0e23\u0e30\u0e1a\u0e38",
+            )
         if not verify_password(password, actor.password_hash):
-            raise HTTPException(status_code=403, detail="à¸£à¸«à¸±à¸ªà¸œà¹ˆà¸²à¸™à¹„à¸¡à¹ˆà¸–à¸¹à¸à¸•à¹‰à¸­à¸‡")
+            raise HTTPException(
+                status_code=403,
+                detail="\u0e23\u0e2b\u0e31\u0e2a\u0e1c\u0e48\u0e32\u0e19\u0e44\u0e21\u0e48\u0e16\u0e39\u0e01\u0e15\u0e49\u0e2d\u0e07",
+            )
     
         ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
         if not ticket:

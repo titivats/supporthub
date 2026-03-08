@@ -19,7 +19,6 @@ set "PORT=8888"
 set "LOGDIR=%PROJ%\logs"
 set "LOGFILE=%LOGDIR%\start_supporthub.log"
 set "WEB_CONFIG=%PROJ%\web.config"
-set "DEFAULT_DB_URL=postgresql+psycopg://supporthub_user:YourStrongPassword@127.0.0.1:5432/supporthub"
 
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
 
@@ -40,14 +39,25 @@ if not defined SUPPORTHUB_DATABASE_URL (
 )
 
 if not defined SUPPORTHUB_DATABASE_URL (
-  set "SUPPORTHUB_DATABASE_URL=%DEFAULT_DB_URL%"
-  echo [WARN] SUPPORTHUB_DATABASE_URL not found in web.config, using launcher default.
-  echo [WARN] SUPPORTHUB_DATABASE_URL not found in web.config, using launcher default. >> "%LOGFILE%"
+  echo [ERROR] SUPPORTHUB_DATABASE_URL was not found.
+  echo [ERROR] Configure it in: %WEB_CONFIG%
+  echo [ERROR] SUPPORTHUB_DATABASE_URL was not found. >> "%LOGFILE%"
+  echo [ERROR] Configure it in: %WEB_CONFIG% >> "%LOGFILE%"
+  goto :END
 )
 
-set "DB_MODE=SQLite (default)"
-if defined SUPPORTHUB_DATABASE_URL (
-  set "DB_MODE=PostgreSQL (SUPPORTHUB_DATABASE_URL)"
+set "DB_MODE=PostgreSQL (required)"
+
+set "URL_HEAD_A=%SUPPORTHUB_DATABASE_URL:~0,13%"
+set "URL_HEAD_B=%SUPPORTHUB_DATABASE_URL:~0,21%"
+if /I not "%URL_HEAD_A%"=="postgresql://" (
+  if /I not "%URL_HEAD_B%"=="postgresql+psycopg://" (
+    echo [ERROR] SUPPORTHUB_DATABASE_URL must start with postgresql:// or postgresql+psycopg://
+    echo [ERROR] Current value is invalid for PostgreSQL-only mode.
+    echo [ERROR] SUPPORTHUB_DATABASE_URL must start with postgresql:// or postgresql+psycopg:// >> "%LOGFILE%"
+    echo [ERROR] Current value is invalid for PostgreSQL-only mode. >> "%LOGFILE%"
+    goto :END
+  )
 )
 
 echo.
@@ -107,15 +117,12 @@ if errorlevel 1 (
   echo [WARN] pip install returned non-zero. >> "%LOGFILE%"
 )
 
-set "DB_SCHEME=%SUPPORTHUB_DATABASE_URL:~0,10%"
-if /I "%DB_SCHEME%"=="postgresql" (
-  python -c "import psycopg" >nul 2>&1
-  if errorlevel 1 (
-    echo [ERROR] psycopg is missing for PostgreSQL connection.
-    echo [ERROR] Install psycopg or add psycopg wheels into: %WHEELS%
-    echo [ERROR] psycopg is missing for PostgreSQL connection. >> "%LOGFILE%"
-    goto :END
-  )
+python -c "import psycopg" >nul 2>&1
+if errorlevel 1 (
+  echo [ERROR] psycopg is missing for PostgreSQL connection.
+  echo [ERROR] Install psycopg or add psycopg wheels into: %WHEELS%
+  echo [ERROR] psycopg is missing for PostgreSQL connection. >> "%LOGFILE%"
+  goto :END
 )
 
 if not exist "%PROJ%\python\server_app.py" (
