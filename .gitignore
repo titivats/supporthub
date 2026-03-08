@@ -20,6 +20,9 @@ supporthub.local.bat
 *.db-shm
 *.sqlite
 *.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+database/monitoring_line_map.json
 
 .pytest_cache/
 .mypy_cache/

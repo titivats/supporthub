@@ -1,6 +1,6 @@
-<!doctype html>
+﻿<!doctype html>
 <meta charset="utf-8">
-<title>Manage Users — SupportHub</title>
+<title>Manage Users â€” SupportHub</title>
 <style>
   :root{ --bg:#f6f7fb; --card:#ffffff; --line:#e7e7ee; --muted:#6B7280; }
   *{ box-sizing:border-box }
@@ -15,17 +15,19 @@
   input, select{ width:100%; padding:9px; border:1px solid #d7d9e0; border-radius:10px }
   .grid{ display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:10px }
 
-  table{ width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; table-layout:fixed }
-  colgroup col.col-user{ width: 220px }
-  colgroup col.col-role{ width: 160px }
-  colgroup col.col-pass{ width: 240px }
-  colgroup col.col-created{ width: 220px }
-  colgroup col.col-action{ width: 220px }
-  th, td{ padding:10px; border-bottom:1px solid var(--line); vertical-align:middle; text-align:left; }
+  table{ width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; table-layout:auto }
+  colgroup col.col-user{ width: 10ch }
+  colgroup col.col-role{ width: 12ch }
+  colgroup col.col-pass{ width: 18ch }
+  colgroup col.col-actual{ width: 16ch }
+  colgroup col.col-created{ width: 20ch }
+  colgroup col.col-action{ width: 14ch }
+  th, td{ padding:10px; border-bottom:1px solid var(--line); vertical-align:middle; text-align:left; white-space:nowrap; }
   thead th{ background:#f0f2ff; font-weight:600 }
   td .muted{ color:#6b7280 }
   td .actions{ display:flex; gap:8px; flex-wrap:wrap }
   .note{ font-size:12px; color:#6b7280; margin-top:6px }
+  .users-table input, .users-table select{ width:100%; min-width:0; }
 </style>
 
 {% if request.query_params.get('pw_updated') == '1' or pw_updated %}
@@ -46,11 +48,11 @@
     <form class="grid" action="/admin/users/create" method="post">
       <div>
         <label>Username</label>
-        <input name="username" required>
+        <input name="username" required inputmode="numeric" pattern="\d{6}" minlength="6" maxlength="6" placeholder="e.g. 512652" title="Use numbers only (exactly 6 digits)">
       </div>
       <div>
         <label>Password</label>
-        <input name="password" required>
+        <input name="password" type="password" required maxlength="12" title="Maximum 12 characters">
       </div>
       <div>
         <label>Role</label>
@@ -65,15 +67,16 @@
         <button class="btn primary" type="submit">Create</button>
       </div>
     </form>
-    <div class="note">หมายเหตุ: ระบบไม่แสดงรหัสผ่านเดิมของผู้ใช้ (เก็บแบบแฮช). หากต้องการเปลี่ยน ให้กรอกรหัสใหม่ในแถวของผู้ใช้นั้นแล้วกด Save</div>
+        <div class="note">Username: numbers only, exactly 6 digits. Password: max 12 characters.</div>
   </div>
 
   <!-- Users table -->
-  <table>
+  <table class="users-table">
     <colgroup>
       <col class="col-user">
       <col class="col-role">
       <col class="col-pass">
+      <col class="col-actual">
       <col class="col-created">
       <col class="col-action">
     </colgroup>
@@ -82,6 +85,7 @@
         <th>Username</th>
         <th>Role</th>
         <th>Set New Password</th>
+        <th>Actual Password</th>
         <th>Created</th>
         <th>Action</th>
       </tr>
@@ -94,7 +98,7 @@
         </td>
 
         <td>
-          <form action="/admin/users/update/{{u.id}}" method="post" id="form-update-{{u.id}}">
+          <form action="/admin/users/update/{{u.id}}" method="post" id="form-update-{{u.id}}" onsubmit="return confirm('Are you sure you want to save changes for this user?');">
             <select name="role" {% if u.username|upper == 'ADMIN' and me.username|upper != 'ADMIN' %}disabled{% endif %}>
               {% for r in ["Operator","Engineer","Technician","Admin"] %}
                 <option {% if u.role==r %}selected{% endif %}>{{r}}</option>
@@ -103,11 +107,15 @@
         </td>
 
         <td>
-            <input name="new_password" type="password" placeholder="เว้นว่างหากไม่เปลี่ยน" {% if u.username|upper == 'ADMIN' and me.username|upper != 'ADMIN' %}disabled{% endif %}>
+            <input name="new_password" type="password" maxlength="12" placeholder="Leave blank if unchanged" title="Maximum 12 characters" {% if u.username|upper == 'ADMIN' and me.username|upper != 'ADMIN' %}disabled{% endif %}>
         </td>
 
         <td>
-          <!-- ใช้เวลาไทย + รูปแบบ วัน-เดือน-ปี -->
+          <input type="text" value="{{ u.password_plain if (me.username|upper == 'ADMIN' and u.password_plain) else '-' }}" readonly title="Visible for ADMIN user.">
+        </td>
+
+        <td>
+          <!-- à¹ƒà¸Šà¹‰à¹€à¸§à¸¥à¸²à¹„à¸—à¸¢ + à¸£à¸¹à¸›à¹à¸šà¸š à¸§à¸±à¸™-à¹€à¸”à¸·à¸­à¸™-à¸›à¸µ -->
           <div class="muted">{{ fmt_th(u.created_at) }}</div>
         </td>
 
@@ -115,7 +123,7 @@
           <div class="actions">
             <button class="btn primary" type="submit" {% if u.username|upper == 'ADMIN' and me.username|upper != 'ADMIN' %}disabled{% endif %}>Save</button>
           </form>
-            <form action="/admin/users/delete/{{u.id}}" method="post" onsubmit="return confirm('ลบผู้ใช้นี้?');" style="display:inline">
+            <form action="/admin/users/delete/{{u.id}}" method="post" onsubmit="return confirm('Are you sure you want to delete this user?');" style="display:inline">
               <button class="btn" type="submit" {% if u.username|upper == 'ADMIN' %}disabled{% endif %}>Delete</button>
             </form>
           </div>
@@ -130,7 +138,7 @@
 (function(){
   function showAndClean(){
     try{
-      alert("ตั้งรหัสผ่านใหม่สำเร็จแล้ว");
+      alert("Password updated successfully.");
       const params = new URLSearchParams(location.search);
       params.delete('pw_updated');
       const url = location.pathname + (params.toString() ? ('?' + params.toString()) : '');

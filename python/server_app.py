@@ -4,7 +4,9 @@ from datetime import datetime, time
 from typing import Optional, List, Dict
 import json
 import io
+import os
 import threading
+from pathlib import Path
 
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -130,6 +132,8 @@ DEFAULT_SUPPORT_AREA_MAP = {
     "Etc..": ["Etc.."],
 }
 LINE_MACHINE_MAP_SETTING_KEY = "line_machine_map_v1"
+DEFAULT_LINE_MACHINE_MAP_FILE = "database/monitoring_line_map.json"
+LINE_MACHINE_MAP_FILE_ENV = "SUPPORTHUB_LINE_MACHINE_MAP_FILE"
 
 MASTER_STATUS_TEXT = {
     "line_added": "Added new Line No. successfully",
@@ -344,7 +348,35 @@ def _normalize_line_machine_map(raw: object) -> Dict[str, List[str]]:
             out[line_no] = sorted(items, key=lambda s: s.lower())
     return out
 
+def _line_machine_map_path() -> Path:
+    custom_path = _clean_text(os.getenv(LINE_MACHINE_MAP_FILE_ENV))
+    if custom_path:
+        return Path(custom_path).expanduser()
+    return Path(__file__).resolve().parents[1] / DEFAULT_LINE_MACHINE_MAP_FILE
+
+def _read_line_machine_map_file(path: Path) -> Dict[str, List[str]]:
+    if not path.exists():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8") or "{}")
+    except Exception as e:
+        print(f"[WARN] Failed to read monitoring map file: {path} ({e})")
+        return {}
+    return _normalize_line_machine_map(raw)
+
+def _write_line_machine_map_file(path: Path, line_machine_map: Dict[str, List[str]]) -> None:
+    normalized = _normalize_line_machine_map(line_machine_map)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(normalized, ensure_ascii=False, indent=2), encoding="utf-8")
+
 def _get_line_machine_map(db: Session) -> Dict[str, List[str]]:
+    # Monitoring mapping is file-based to keep it outside PostgreSQL.
+    map_file = _line_machine_map_path()
+    file_map = _read_line_machine_map_file(map_file)
+    if map_file.exists():
+        return file_map
+
+    # One-time fallback: migrate legacy mapping from app_settings if present.
     row = db.query(AppSetting).filter(AppSetting.key == LINE_MACHINE_MAP_SETTING_KEY).first()
     if not row or not _clean_text(row.value):
         return {}
@@ -352,16 +384,19 @@ def _get_line_machine_map(db: Session) -> Dict[str, List[str]]:
         raw = json.loads(row.value)
     except Exception:
         return {}
-    return _normalize_line_machine_map(raw)
+    normalized = _normalize_line_machine_map(raw)
+    if normalized:
+        _write_line_machine_map_file(map_file, normalized)
+    return normalized
 
 def _save_line_machine_map(db: Session, line_machine_map: Dict[str, List[str]]) -> None:
-    payload = json.dumps(_normalize_line_machine_map(line_machine_map), ensure_ascii=False)
+    map_file = _line_machine_map_path()
+    _write_line_machine_map_file(map_file, line_machine_map)
+
+    # Remove old app_settings row so Monitoring no longer stores this in DB.
     row = db.query(AppSetting).filter(AppSetting.key == LINE_MACHINE_MAP_SETTING_KEY).first()
-    if not row:
-        row = AppSetting(key=LINE_MACHINE_MAP_SETTING_KEY, value=payload)
-    else:
-        row.value = payload
-    db.add(row)
+    if row:
+        db.delete(row)
 
 def _build_monitoring_item_options(
     machine_list: List[str],

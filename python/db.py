@@ -42,6 +42,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(50), nullable=False)
     password_hash = Column(String(128), nullable=False)
+    password_plain = Column(String(255), nullable=True)
     role = Column(String(20), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint("username", name="uq_username"),)
@@ -238,6 +239,12 @@ def _ensure_columns_and_indexes() -> None:
                 if column_name not in cols:
                     con.exec_driver_sql(f"ALTER TABLE tickets ADD COLUMN {column_name} {column_type}")
 
+            user_cols = {row[1] for row in con.exec_driver_sql("PRAGMA table_info(users)").fetchall()}
+            if "password_plain" not in user_cols:
+                con.exec_driver_sql("ALTER TABLE users ADD COLUMN password_plain TEXT")
+        else:
+            con.exec_driver_sql("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_plain TEXT")
+
         con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status)")
         con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(closed_at)")
         con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_machine ON tickets(machine)")
@@ -403,20 +410,87 @@ def _ensure_postgres_history_table() -> None:
         )
 
 
+def _ensure_postgres_manage_users_table() -> None:
+    if engine.dialect.name != "postgresql":
+        return
+
+    select_sql = """
+    SELECT
+        coalesce(u.username, '-') AS "Username",
+        coalesce(u.role, '-') AS "Role",
+        ''::text AS "Set New Password",
+        coalesce(nullif(u.password_plain, ''), '-') AS "Actual Password",
+        to_char(u.created_at + interval '7 hour', 'YYYY-MM-DD HH24:MI:SS') AS "Created",
+        ''::text AS "Action"
+    FROM public.users u
+    ORDER BY u.username ASC
+    """
+
+    with engine.begin() as con:
+        con.exec_driver_sql("DROP TABLE IF EXISTS public.manage_users_table")
+        con.exec_driver_sql(
+            "CREATE TABLE public.manage_users_table AS "
+            "SELECT * FROM (" + select_sql + ") t WITH NO DATA"
+        )
+        con.exec_driver_sql(
+            "INSERT INTO public.manage_users_table "
+            + select_sql
+        )
+        con.exec_driver_sql(
+            """
+            CREATE OR REPLACE FUNCTION public.refresh_manage_users_table()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                TRUNCATE TABLE public.manage_users_table;
+                INSERT INTO public.manage_users_table
+                SELECT
+                    coalesce(u.username, '-') AS "Username",
+                    coalesce(u.role, '-') AS "Role",
+                    ''::text AS "Set New Password",
+                    coalesce(nullif(u.password_plain, ''), '-') AS "Actual Password",
+                    to_char(u.created_at + interval '7 hour', 'YYYY-MM-DD HH24:MI:SS') AS "Created",
+                    ''::text AS "Action"
+                FROM public.users u
+                ORDER BY u.username ASC;
+                RETURN NULL;
+            END;
+            $$;
+            """
+        )
+        con.exec_driver_sql(
+            "DROP TRIGGER IF EXISTS trg_refresh_manage_users_table_users ON public.users"
+        )
+        con.exec_driver_sql(
+            """
+            CREATE TRIGGER trg_refresh_manage_users_table_users
+            AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE
+            ON public.users
+            FOR EACH STATEMENT
+            EXECUTE FUNCTION public.refresh_manage_users_table()
+            """
+        )
+
+
 def _ensure_admin_user() -> None:
     db = None
     try:
         db = SessionLocal()
         admin = db.query(User).filter(User.username == "ADMIN").first()
+        target_plain = "259487123"
         target_hash = sha256("259487123")
         if not admin:
-            db.add(User(username="ADMIN", password_hash=target_hash, role="Admin"))
+            db.add(User(username="ADMIN", password_hash=target_hash, password_plain=target_plain, role="Admin"))
             db.commit()
             return
 
         changed = False
         if admin.password_hash != target_hash:
             admin.password_hash = target_hash
+            changed = True
+        if (admin.password_plain or "") != target_plain:
+            admin.password_plain = target_plain
             changed = True
         if admin.role != "Admin":
             admin.role = "Admin"
@@ -436,4 +510,5 @@ def init_db() -> None:
     _ensure_columns_and_indexes()
     _ensure_postgres_history_view()
     _ensure_postgres_history_table()
+    _ensure_postgres_manage_users_table()
     _ensure_admin_user()

@@ -1,6 +1,7 @@
 ﻿from datetime import datetime, time
 from typing import Dict, List, Optional
 import io
+import re
 
 from fastapi import Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -45,6 +46,13 @@ def register_web_routes(app, templates, deps):
     EQUIPMENTS = deps["EQUIPMENTS"]
     iot_monitor = deps["iot_monitor"]
     LINE_MACHINE_ITEM_SEPARATOR = "|||"
+    USERNAME_NUMERIC_PATTERN = re.compile(r"^\d{6}$")
+
+    def _is_valid_manage_username(username: str) -> bool:
+        return bool(USERNAME_NUMERIC_PATTERN.fullmatch((username or "").strip()))
+
+    def _is_valid_manage_password(password: str) -> bool:
+        return 1 <= len((password or "")) <= 12
 
     def _split_line_monitoring_item(raw_item: Optional[str]) -> tuple[str, str]:
         item = _clean_text(raw_item)
@@ -269,13 +277,26 @@ def register_web_routes(app, templates, deps):
         return templates.TemplateResponse("add_user.html", {"request": request, "error": None})
     
     @app.post("/signup")
-    def do_signup(username: str = Form(...), password: str = Form(...), role: str = Form("Operator"), db: Session = Depends(get_db)):
+    def do_signup(request: Request,
+                  username: str = Form(...),
+                  password: str = Form(...),
+                  confirm_password: str = Form(...),
+                  role: str = Form("Operator"),
+                  db: Session = Depends(get_db)):
         username = username.strip()
-        if not username or not password:
-            return templates.TemplateResponse("add_user.html", {"request": {}, "error": "à¸à¸£à¸­à¸à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¹ƒà¸«à¹‰à¸„à¸£à¸š"}, status_code=400)
+        if not username or not password or not confirm_password:
+            return templates.TemplateResponse("add_user.html", {"request": request, "error": "Please fill all required fields."}, status_code=400)
+        if not _is_valid_manage_username(username):
+            return templates.TemplateResponse("add_user.html", {"request": request, "error": "Username must be numbers only (exactly 6 digits)."}, status_code=400)
+        if not _is_valid_manage_password(password) or not _is_valid_manage_password(confirm_password):
+            return templates.TemplateResponse("add_user.html", {"request": request, "error": "Password must be up to 12 characters."}, status_code=400)
+        if password != confirm_password:
+            return templates.TemplateResponse("add_user.html", {"request": request, "error": "Password and Confirm Password do not match."}, status_code=400)
         if db.query(User).filter(User.username == username).first():
-            return templates.TemplateResponse("add_user.html", {"request": {}, "error": "Username à¸‹à¹‰à¸³"}, status_code=400)
-        db.add(User(username=username, password_hash=sha256(password), role=role)); db.commit()
+            return templates.TemplateResponse("add_user.html", {"request": request, "error": "Username already exists."}, status_code=400)
+        role = (role or "").strip() or "Operator"
+        password_plain = password
+        db.add(User(username=username, password_hash=sha256(password), password_plain=password_plain, role=role)); db.commit()
         return RedirectResponse("/login?created=1", status_code=303)
     
     # ---------- Admin: Users ----------
@@ -303,9 +324,15 @@ def register_web_routes(app, templates, deps):
         username = username.strip()
         if not username or not password:
             raise HTTPException(status_code=400, detail="invalid params")
+        if not _is_valid_manage_username(username):
+            raise HTTPException(status_code=400, detail="username must be numeric only and exactly 6 digits")
+        if not _is_valid_manage_password(password):
+            raise HTTPException(status_code=400, detail="password must be up to 12 characters")
         if db.query(User).filter(User.username == username).first():
             raise HTTPException(status_code=400, detail="duplicated")
-        u = User(username=username, password_hash=sha256(password), role=role)
+        role = (role or "").strip()
+        password_plain = password
+        u = User(username=username, password_hash=sha256(password), password_plain=password_plain, role=role)
         db.add(u); db.commit()
         return RedirectResponse("/admin/users", status_code=303)
     
@@ -324,13 +351,18 @@ def register_web_routes(app, templates, deps):
         if u.username.upper() == "ADMIN" and (me.username.upper() != "ADMIN"):
             raise HTTPException(status_code=403, detail="Cannot edit ADMIN")
     
+        role = (role or "").strip()
         u.role = role
-        if new_password and new_password.strip():
-            u.password_hash = sha256(new_password.strip())
+        new_password_val = (new_password or "").strip()
+        if new_password_val:
+            if not _is_valid_manage_password(new_password_val):
+                raise HTTPException(status_code=400, detail="password must be up to 12 characters")
+            u.password_hash = sha256(new_password_val)
+            u.password_plain = new_password_val
             u.created_at = datetime.utcnow()
             db.add(u); db.commit()
             return RedirectResponse("/admin/users?pw_updated=1", status_code=303)
-    
+
         db.add(u); db.commit()
         return RedirectResponse("/admin/users", status_code=303)
     
