@@ -1,7 +1,9 @@
+import json
 import os
 from datetime import datetime
+from pathlib import Path
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint, create_engine, event
+from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint, create_engine, event, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from python.auth import sha256
@@ -477,6 +479,284 @@ def _ensure_postgres_manage_users_table() -> None:
         )
 
 
+LINE_MACHINE_ITEM_SEPARATOR = "|||"
+LINE_MACHINE_MAP_SETTING_KEY = "line_machine_map_v1"
+DEFAULT_LINE_MACHINE_MAP_FILE = os.path.join(BASE_DIR, "database", "monitoring_line_map.json")
+
+
+def _load_line_monitoring_raw_from_file():
+    map_path_env = (os.getenv("SUPPORTHUB_LINE_MACHINE_MAP_FILE") or "").strip()
+    map_path = Path(map_path_env).expanduser() if map_path_env else Path(DEFAULT_LINE_MACHINE_MAP_FILE)
+    if not map_path.exists():
+        return {}
+    try:
+        raw = json.loads(map_path.read_text(encoding="utf-8") or "{}")
+    except Exception as exc:
+        print(f"[INIT] Failed to read line-monitoring map file ({map_path}): {exc}")
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _normalize_line_monitoring_rows(raw_map):
+    if not isinstance(raw_map, dict):
+        return []
+
+    rows = []
+    seen = set()
+    for raw_line_no, raw_items in raw_map.items():
+        line_no = str(raw_line_no or "").strip().upper()
+        if not line_no:
+            continue
+        values = raw_items if isinstance(raw_items, list) else [raw_items]
+        for raw_item in values:
+            item = str(raw_item or "").strip()
+            if not item:
+                continue
+            machine_type = item
+            machine_id = "-"
+            if LINE_MACHINE_ITEM_SEPARATOR in item:
+                left, right = item.split(LINE_MACHINE_ITEM_SEPARATOR, 1)
+                machine_type = (left or "").strip()
+                machine_id = (right or "").strip() or "-"
+            if not machine_type:
+                continue
+            dedupe_key = (line_no.lower(), machine_type.lower(), machine_id.lower())
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            rows.append({
+                "line_no": line_no,
+                "machine_type": machine_type,
+                "machine_id": machine_id,
+                "action": "",
+            })
+
+    rows.sort(key=lambda r: (r["line_no"].lower(), r["machine_type"].lower(), r["machine_id"].lower()))
+    return rows
+
+
+def _load_line_monitoring_rows_for_postgres(con):
+    raw_map = _load_line_monitoring_raw_from_file()
+    if raw_map:
+        return _normalize_line_monitoring_rows(raw_map)
+
+    legacy_row = con.execute(
+        text("SELECT value FROM public.app_settings WHERE key = :k LIMIT 1"),
+        {"k": LINE_MACHINE_MAP_SETTING_KEY},
+    ).scalar()
+    if not legacy_row:
+        return []
+    try:
+        legacy_raw = json.loads(legacy_row)
+    except Exception:
+        return []
+    return _normalize_line_monitoring_rows(legacy_raw)
+
+
+def _refresh_postgres_line_to_monitoring_page_table(con) -> None:
+    table_name = "add_machine_line_to_monitoring_page_table"
+    con.exec_driver_sql(f"DROP TABLE IF EXISTS public.{table_name}")
+    con.exec_driver_sql(
+        f"""
+        CREATE TABLE public.{table_name} (
+            "Line No." text,
+            "Machine Type" text,
+            "Machine ID" text,
+            "Action" text
+        )
+        """
+    )
+
+    rows = _load_line_monitoring_rows_for_postgres(con)
+    if rows:
+        con.execute(
+            text(
+                f"""
+                INSERT INTO public.{table_name} ("Line No.", "Machine Type", "Machine ID", "Action")
+                VALUES (:line_no, :machine_type, :machine_id, :action)
+                """
+            ),
+            rows,
+        )
+
+
+def refresh_postgres_line_to_monitoring_page_table() -> None:
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.begin() as con:
+        _refresh_postgres_line_to_monitoring_page_table(con)
+
+
+def _ensure_postgres_add_machine_tables() -> None:
+    if engine.dialect.name != "postgresql":
+        return
+
+    def _rebuild_table(con, table_name: str, select_sql: str, source_table: str, refresh_fn: str, trigger_name: str):
+        con.exec_driver_sql(f"DROP TABLE IF EXISTS public.{table_name}")
+        con.exec_driver_sql(
+            f"CREATE TABLE public.{table_name} AS SELECT * FROM ({select_sql}) t WITH NO DATA"
+        )
+        con.exec_driver_sql(f"INSERT INTO public.{table_name} {select_sql}")
+        con.exec_driver_sql(
+            f"""
+            CREATE OR REPLACE FUNCTION public.{refresh_fn}()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                TRUNCATE TABLE public.{table_name};
+                INSERT INTO public.{table_name}
+                {select_sql};
+                RETURN NULL;
+            END;
+            $$;
+            """
+        )
+        con.exec_driver_sql(f"DROP TRIGGER IF EXISTS {trigger_name} ON public.{source_table}")
+        con.exec_driver_sql(
+            f"""
+            CREATE TRIGGER {trigger_name}
+            AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE
+            ON public.{source_table}
+            FOR EACH STATEMENT
+            EXECUTE FUNCTION public.{refresh_fn}()
+            """
+        )
+
+    with engine.begin() as con:
+        _rebuild_table(
+            con,
+            "add_machine_support_area_table",
+            """
+            SELECT
+                coalesce(sa.support_area, '-') AS "Support Area",
+                to_char(sa.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
+                ''::text AS "Action"
+            FROM public.master_support_areas sa
+            ORDER BY sa.created_at ASC, sa.id ASC
+            """,
+            "master_support_areas",
+            "refresh_am_support_area_table",
+            "trg_refresh_am_support_area",
+        )
+        _rebuild_table(
+            con,
+            "add_machine_support_area_to_machine_table",
+            """
+            SELECT
+                coalesce(sm.support_area, '-') AS "Support Area",
+                coalesce(sm.machine, '-') AS "Machine",
+                to_char(sm.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
+                ''::text AS "Action"
+            FROM public.master_support_area_maps sm
+            ORDER BY sm.created_at ASC, sm.id ASC
+            """,
+            "master_support_area_maps",
+            "refresh_am_support_area_to_machine_table",
+            "trg_refresh_am_support_area_to_machine",
+        )
+        _rebuild_table(
+            con,
+            "add_machine_line_no_table",
+            """
+            SELECT
+                coalesce(l.line_no, '-') AS "Line No.",
+                to_char(l.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
+                ''::text AS "Action"
+            FROM public.master_lines l
+            ORDER BY l.line_no ASC
+            """,
+            "master_lines",
+            "refresh_am_line_no_table",
+            "trg_refresh_am_line_no",
+        )
+        _rebuild_table(
+            con,
+            "add_machine_machine_table",
+            """
+            SELECT
+                coalesce(m.machine, '-') AS "Machine",
+                to_char(m.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
+                ''::text AS "Action"
+            FROM public.master_machines m
+            ORDER BY m.machine ASC
+            """,
+            "master_machines",
+            "refresh_am_machine_table",
+            "trg_refresh_am_machine",
+        )
+        _rebuild_table(
+            con,
+            "add_machine_machine_type_table",
+            """
+            SELECT
+                coalesce(mt.machine, '-') AS "Machine",
+                coalesce(mt.machine_type, '-') AS "Machine Type",
+                to_char(mt.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
+                ''::text AS "Action"
+            FROM public.master_machine_types mt
+            ORDER BY mt.machine ASC, mt.machine_type ASC
+            """,
+            "master_machine_types",
+            "refresh_am_machine_type_table",
+            "trg_refresh_am_machine_type",
+        )
+        _rebuild_table(
+            con,
+            "add_machine_machine_id_table",
+            """
+            SELECT
+                coalesce(mi.machine, '-') AS "Machine",
+                coalesce(mi.machine_type, '-') AS "Machine Type",
+                coalesce(mi.machine_id, '-') AS "Machine ID",
+                to_char(mi.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
+                ''::text AS "Action"
+            FROM public.master_machine_ids mi
+            ORDER BY mi.machine ASC, mi.machine_type ASC, mi.machine_id ASC
+            """,
+            "master_machine_ids",
+            "refresh_am_machine_id_table",
+            "trg_refresh_am_machine_id",
+        )
+        _rebuild_table(
+            con,
+            "add_machine_problem_table",
+            """
+            SELECT
+                coalesce(p.machine, '-') AS "Machine",
+                coalesce(nullif(p.machine_type, ''), '-') AS "Machine Type",
+                coalesce(p.problem, '-') AS "Problem",
+                to_char(p.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
+                ''::text AS "Action"
+            FROM public.master_problems p
+            ORDER BY p.machine ASC, p.machine_type ASC, p.problem ASC
+            """,
+            "master_problems",
+            "refresh_am_problem_table",
+            "trg_refresh_am_problem",
+        )
+        _rebuild_table(
+            con,
+            "add_machine_update_history_table",
+            """
+            SELECT
+                to_char(a.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
+                coalesce(a.actor, '-') AS "User",
+                coalesce(a.action, '-') AS "Action",
+                coalesce(a.data_type, '-') AS "Data Type",
+                coalesce(a.item, '-') AS "Item",
+                coalesce(a.details, '-') AS "Details"
+            FROM public.master_audit_logs a
+            ORDER BY a.created_at DESC, a.id DESC
+            """,
+            "master_audit_logs",
+            "refresh_am_update_history_table",
+            "trg_refresh_am_update_history",
+        )
+
+        _refresh_postgres_line_to_monitoring_page_table(con)
+
+
 def _ensure_admin_user() -> None:
     db = None
     try:
@@ -515,4 +795,5 @@ def init_db() -> None:
     _ensure_postgres_history_view()
     _ensure_postgres_history_table()
     _ensure_postgres_manage_users_table()
+    _ensure_postgres_add_machine_tables()
     _ensure_admin_user()

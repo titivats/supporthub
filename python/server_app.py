@@ -38,6 +38,7 @@ from python.db import (
     User,
     get_db,
     init_db,
+    refresh_postgres_line_to_monitoring_page_table,
 )
 from python.notify import line_notify
 from python.OEE.oee_metrics import build_monitoring_line_metrics, build_monitoring_metrics, parse_th_date_range
@@ -397,6 +398,11 @@ def _save_line_machine_map(db: Session, line_machine_map: Dict[str, List[str]]) 
     row = db.query(AppSetting).filter(AppSetting.key == LINE_MACHINE_MAP_SETTING_KEY).first()
     if row:
         db.delete(row)
+
+    try:
+        refresh_postgres_line_to_monitoring_page_table()
+    except Exception as exc:
+        print("[WARN] refresh_postgres_line_to_monitoring_page_table error:", exc)
 
 def _build_monitoring_item_options(
     machine_list: List[str],
