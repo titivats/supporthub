@@ -253,6 +253,138 @@ def _ensure_columns_and_indexes() -> None:
         con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_machine_id ON tickets(machine_id)")
 
 
+def _ensure_postgres_iot_tables() -> None:
+    if engine.dialect.name != "postgresql":
+        return
+
+    with engine.begin() as con:
+        con.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS public.iot_monitor_measurements (
+                id BIGSERIAL PRIMARY KEY,
+                recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                broker VARCHAR(255),
+                topic VARCHAR(255),
+                mqtt_client VARCHAR(255),
+                voltage NUMERIC(14,4),
+                current NUMERIC(14,4),
+                power NUMERIC(14,4),
+                power_factor NUMERIC(8,4),
+                energy NUMERIC(18,6),
+                frequency NUMERIC(10,4),
+                raw_payload TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                CONSTRAINT ck_iot_power_factor_range
+                    CHECK (power_factor IS NULL OR (power_factor >= -1 AND power_factor <= 1))
+            )
+            """
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_measurements "
+            "ADD COLUMN IF NOT EXISTS broker VARCHAR(255)"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_measurements "
+            "ADD COLUMN IF NOT EXISTS topic VARCHAR(255)"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_measurements "
+            "ADD COLUMN IF NOT EXISTS mqtt_client VARCHAR(255)"
+        )
+        con.exec_driver_sql(
+            "DROP INDEX IF EXISTS idx_iot_monitor_measurements_machine_time"
+        )
+        con.exec_driver_sql(
+            "DROP INDEX IF EXISTS idx_iot_monitor_measurements_line_time"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_measurements "
+            "DROP COLUMN IF EXISTS source_topic"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_measurements "
+            "DROP COLUMN IF EXISTS line_no"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_measurements "
+            "DROP COLUMN IF EXISTS machine"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_measurements "
+            "DROP COLUMN IF EXISTS machine_type"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_measurements "
+            "DROP COLUMN IF EXISTS machine_id"
+        )
+        con.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS idx_iot_monitor_measurements_recorded_at
+            ON public.iot_monitor_measurements (recorded_at DESC)
+            """
+        )
+        con.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS public.iot_monitor_status_logs (
+                id BIGSERIAL PRIMARY KEY,
+                recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                broker VARCHAR(255),
+                topic VARCHAR(255),
+                mqtt_client VARCHAR(255),
+                connected BOOLEAN NOT NULL DEFAULT FALSE,
+                last_message_at TIMESTAMPTZ,
+                message_count BIGINT NOT NULL DEFAULT 0,
+                parse_error_count BIGINT NOT NULL DEFAULT 0,
+                last_payload TEXT,
+                last_error TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_status_logs "
+            "ADD COLUMN IF NOT EXISTS broker VARCHAR(255)"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_status_logs "
+            "ADD COLUMN IF NOT EXISTS topic VARCHAR(255)"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_status_logs "
+            "ADD COLUMN IF NOT EXISTS mqtt_client VARCHAR(255)"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_status_logs "
+            "ADD COLUMN IF NOT EXISTS connected BOOLEAN NOT NULL DEFAULT FALSE"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_status_logs "
+            "ADD COLUMN IF NOT EXISTS last_message_at TIMESTAMPTZ"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_status_logs "
+            "ADD COLUMN IF NOT EXISTS message_count BIGINT NOT NULL DEFAULT 0"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_status_logs "
+            "ADD COLUMN IF NOT EXISTS parse_error_count BIGINT NOT NULL DEFAULT 0"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_status_logs "
+            "ADD COLUMN IF NOT EXISTS last_payload TEXT"
+        )
+        con.exec_driver_sql(
+            "ALTER TABLE public.iot_monitor_status_logs "
+            "ADD COLUMN IF NOT EXISTS last_error TEXT"
+        )
+        con.exec_driver_sql(
+            """
+            CREATE INDEX IF NOT EXISTS idx_iot_monitor_status_logs_recorded_at
+            ON public.iot_monitor_status_logs (recorded_at DESC)
+            """
+        )
+
+
 def _ensure_postgres_history_view() -> None:
     if engine.dialect.name != "postgresql":
         return
@@ -792,6 +924,7 @@ def _ensure_admin_user() -> None:
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_columns_and_indexes()
+    _ensure_postgres_iot_tables()
     _ensure_postgres_history_view()
     _ensure_postgres_history_table()
     _ensure_postgres_manage_users_table()

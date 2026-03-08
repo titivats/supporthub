@@ -8,6 +8,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict
 
+from sqlalchemy import text
+
+from python.db import SessionLocal, engine
+
 try:
     import paho.mqtt.client as mqtt
 except Exception:  # pragma: no cover - optional dependency
@@ -75,6 +79,67 @@ class IoTMonitorService:
         self.parse_error_count = 0
         self.latest_values: Dict[str, float] = {}
         self.series: Dict[str, deque[_Sample]] = {}
+
+    def _build_status_log_row(self, recorded_at: datetime) -> Dict[str, Any]:
+        return {
+            "recorded_at": recorded_at,
+            "broker": f"{self.host}:{self.port}",
+            "topic": self.topic,
+            "mqtt_client": self.client_id,
+            "connected": self.connected,
+            "last_message_at": self.last_message_at,
+            "message_count": int(self.message_count),
+            "parse_error_count": int(self.parse_error_count),
+            "last_payload": self.last_payload,
+            "last_error": self.last_error,
+        }
+
+    def _insert_status_log_row(self, row: Dict[str, Any]) -> None:
+        if engine.dialect.name != "postgresql":
+            return
+
+        db = SessionLocal()
+        try:
+            db.execute(
+                text(
+                    """
+                    INSERT INTO public.iot_monitor_status_logs (
+                        recorded_at,
+                        broker,
+                        topic,
+                        mqtt_client,
+                        connected,
+                        last_message_at,
+                        message_count,
+                        parse_error_count,
+                        last_payload,
+                        last_error
+                    )
+                    VALUES (
+                        :recorded_at,
+                        :broker,
+                        :topic,
+                        :mqtt_client,
+                        :connected,
+                        :last_message_at,
+                        :message_count,
+                        :parse_error_count,
+                        :last_payload,
+                        :last_error
+                    )
+                    """
+                ),
+                row,
+            )
+            db.commit()
+        except Exception as exc:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            print(f"[IOT] failed to insert status log: {exc}")
+        finally:
+            db.close()
 
     def start(self) -> None:
         with self._lock:
@@ -150,6 +215,8 @@ class IoTMonitorService:
 
     # MQTT callbacks
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):  # noqa: ANN001
+        now = datetime.utcnow()
+        status_row: Dict[str, Any]
         with self._lock:
             if int(reason_code) == 0:
                 self.connected = True
@@ -162,12 +229,18 @@ class IoTMonitorService:
             else:
                 self.connected = False
                 self.last_error = f"MQTT connect failed (reason_code={reason_code})"
+            status_row = self._build_status_log_row(now)
+        self._insert_status_log_row(status_row)
 
     def _on_disconnect(self, client, userdata, reason_code, properties=None):  # noqa: ANN001
+        now = datetime.utcnow()
+        status_row: Dict[str, Any]
         with self._lock:
             self.connected = False
             if int(reason_code) != 0:
                 self.last_error = f"MQTT disconnected (reason_code={reason_code})"
+            status_row = self._build_status_log_row(now)
+        self._insert_status_log_row(status_row)
 
     def _on_message(self, client, userdata, msg):  # noqa: ANN001
         try:
@@ -190,6 +263,7 @@ class IoTMonitorService:
             except Exception:
                 numeric_map = {}
 
+        status_row: Dict[str, Any]
         with self._lock:
             self.last_payload = payload or "-"
             self.last_message_at = now
@@ -197,13 +271,14 @@ class IoTMonitorService:
 
             if not numeric_map:
                 self.parse_error_count += 1
-                return
-
-            for key, val in numeric_map.items():
-                self.latest_values[key] = val
-                if key not in self.series:
-                    self.series[key] = deque(maxlen=self.sample_limit)
-                self.series[key].append(_Sample(ts=now, value=val))
+            else:
+                for key, val in numeric_map.items():
+                    self.latest_values[key] = val
+                    if key not in self.series:
+                        self.series[key] = deque(maxlen=self.sample_limit)
+                    self.series[key].append(_Sample(ts=now, value=val))
+            status_row = self._build_status_log_row(now)
+        self._insert_status_log_row(status_row)
 
 
 iot_monitor = IoTMonitorService()
