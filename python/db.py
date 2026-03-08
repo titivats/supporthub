@@ -3,40 +3,27 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint, create_engine, event, text
+from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint, create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from python.auth import sha256
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-DEFAULT_DB_PATH = os.path.join(BASE_DIR, "database", "supporthub.db")
-os.makedirs(os.path.dirname(DEFAULT_DB_PATH), exist_ok=True)
-DATABASE_URL = os.getenv(
-    "SUPPORTHUB_DATABASE_URL",
-    f"sqlite:///{DEFAULT_DB_PATH.replace(os.sep, '/')}",
-)
+DATABASE_URL = (os.getenv("SUPPORTHUB_DATABASE_URL") or "").strip()
+if not DATABASE_URL:
+    raise RuntimeError("SUPPORTHUB_DATABASE_URL is required (PostgreSQL only).")
+if not (
+    DATABASE_URL.lower().startswith("postgresql://")
+    or DATABASE_URL.lower().startswith("postgresql+psycopg://")
+):
+    raise RuntimeError(
+        "Invalid SUPPORTHUB_DATABASE_URL. PostgreSQL URL is required "
+        "(postgresql:// or postgresql+psycopg://)."
+    )
 
-IS_SQLITE = DATABASE_URL.lower().startswith("sqlite")
-engine_kwargs = {"pool_pre_ping": True}
-if IS_SQLITE:
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
-
-engine = create_engine(DATABASE_URL, **engine_kwargs)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
-
-
-if IS_SQLITE:
-    @event.listens_for(engine, "connect")
-    def set_sqlite_pragma(dbapi_conn, connection_record):
-        cursor = dbapi_conn.cursor()
-        try:
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA synchronous=NORMAL")
-            cursor.execute("PRAGMA busy_timeout=5000")
-            cursor.execute("PRAGMA foreign_keys=ON")
-        finally:
-            cursor.close()
 
 
 class User(Base):
@@ -217,46 +204,32 @@ def get_db():
 
 
 def _ensure_columns_and_indexes() -> None:
-    def _table_columns(con, table_name: str) -> set[str]:
-        if engine.dialect.name == "sqlite":
-            query = f"PRAGMA table_info({table_name})"
-            return {row[1] for row in con.exec_driver_sql(query).fetchall()}
-        query = (
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_schema = 'public' AND table_name = :table_name"
-        )
-        rows = con.execute(text(query), {"table_name": table_name}).fetchall()
-        return {str(row[0]) for row in rows}
-
     with engine.begin() as con:
-        if engine.dialect.name == "sqlite":
-            cols = _table_columns(con, "tickets")
-            need = {
-                "equipment": "TEXT",
-                "machine_id": "TEXT",
-                "problem": "TEXT",
-                "status": "TEXT DEFAULT 'PENDING'",
-                "doing_started_at": "DATETIME",
-                "hold_started_at": "DATETIME",
-                "doing_secs": "INTEGER DEFAULT 0",
-                "hold_secs": "INTEGER DEFAULT 0",
-                "current_actor": "TEXT",
-                "last_action": "TEXT",
-                "hold_reason": "TEXT",
-                "solution": "TEXT",
-                "done_by": "TEXT",
-                "cancel_reason": "TEXT",
-                "canceled_by": "TEXT",
-            }
-            for column_name, column_type in need.items():
-                if column_name not in cols:
-                    con.exec_driver_sql(f"ALTER TABLE tickets ADD COLUMN {column_name} {column_type}")
-
-            user_cols = _table_columns(con, "users")
-            if "password_plain" not in user_cols:
-                con.exec_driver_sql("ALTER TABLE users ADD COLUMN password_plain TEXT")
-        else:
-            con.exec_driver_sql("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_plain TEXT")
+        ticket_columns = (
+            ("equipment", "TEXT"),
+            ("machine_id", "TEXT"),
+            ("problem", "TEXT"),
+            ("status", "TEXT DEFAULT 'PENDING'"),
+            ("doing_started_at", "TIMESTAMPTZ"),
+            ("hold_started_at", "TIMESTAMPTZ"),
+            ("doing_secs", "INTEGER DEFAULT 0"),
+            ("hold_secs", "INTEGER DEFAULT 0"),
+            ("current_actor", "TEXT"),
+            ("last_action", "TEXT"),
+            ("hold_reason", "TEXT"),
+            ("solution", "TEXT"),
+            ("done_by", "TEXT"),
+            ("cancel_reason", "TEXT"),
+            ("canceled_by", "TEXT"),
+        )
+        for column_name, column_type in ticket_columns:
+            con.exec_driver_sql(
+                "ALTER TABLE public.tickets "
+                f"ADD COLUMN IF NOT EXISTS {column_name} {column_type}"
+            )
+        con.exec_driver_sql(
+            "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_plain TEXT"
+        )
 
         for index_sql in (
             "CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status)",

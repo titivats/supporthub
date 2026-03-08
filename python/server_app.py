@@ -57,7 +57,7 @@ def on_startup() -> None:
 def on_shutdown() -> None:
     iot_monitor.stop()
 
-# ---------- Database (SQLite) ----------
+# ---------- Database ----------
 init_db()
 
 # ---------- Realtime version (smart-reload) ----------
