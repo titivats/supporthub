@@ -1,15 +1,12 @@
 ﻿# server_app.py
 
-from datetime import datetime, time
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 import json
-import io
 import os
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi import FastAPI
 
 from sqlalchemy.orm import Session
 
@@ -188,6 +185,14 @@ def _unique_clean(values: List[str]) -> List[str]:
         seen.add(key)
         out.append(val)
     return out
+
+
+def _append_unique_casefold(values: List[str], value: str) -> None:
+    if not value:
+        return
+    lowered = value.lower()
+    if lowered not in {item.lower() for item in values}:
+        values.append(value)
 
 MASTER_SEED_KEY = "master_seed_v1"
 
@@ -448,8 +453,8 @@ def _build_master_data(db: Session) -> Dict[str, object]:
         machine_names.add(machine)
         machine_type_map.setdefault(machine, [])
         problem_map.setdefault(machine, [])
-        if machine_type and machine_type.lower() not in [t.lower() for t in machine_type_map[machine]]:
-            machine_type_map[machine].append(machine_type)
+        if machine_type:
+            _append_unique_casefold(machine_type_map[machine], machine_type)
 
     for row in db.query(MasterProblem).order_by(MasterProblem.machine.asc(), MasterProblem.machine_type.asc(), MasterProblem.problem.asc()).all():
         machine = _clean_text(row.machine)
@@ -463,15 +468,12 @@ def _build_master_data(db: Session) -> Dict[str, object]:
         problem_map.setdefault(machine, [])
 
         if machine_type:
-            if machine_type.lower() not in [t.lower() for t in machine_type_map[machine]]:
-                machine_type_map[machine].append(machine_type)
+            _append_unique_casefold(machine_type_map[machine], machine_type)
             key = f"{machine}||{machine_type}"
             problem_combo_map.setdefault(key, [])
-            if problem.lower() not in [p.lower() for p in problem_combo_map[key]]:
-                problem_combo_map[key].append(problem)
+            _append_unique_casefold(problem_combo_map[key], problem)
         else:
-            if problem.lower() not in [p.lower() for p in problem_map[machine]]:
-                problem_map[machine].append(problem)
+            _append_unique_casefold(problem_map[machine], problem)
 
     for row in db.query(MasterMachineId).order_by(MasterMachineId.machine.asc(), MasterMachineId.machine_type.asc(), MasterMachineId.machine_id.asc()).all():
         machine = _clean_text(row.machine)
@@ -483,13 +485,11 @@ def _build_master_data(db: Session) -> Dict[str, object]:
         machine_names.add(machine)
         machine_type_map.setdefault(machine, [])
         problem_map.setdefault(machine, [])
-        if machine_type.lower() not in [t.lower() for t in machine_type_map[machine]]:
-            machine_type_map[machine].append(machine_type)
+        _append_unique_casefold(machine_type_map[machine], machine_type)
 
         key = f"{machine}||{machine_type}"
         machine_id_map.setdefault(key, [])
-        if machine_id.lower() not in [m.lower() for m in machine_id_map[key]]:
-            machine_id_map[key].append(machine_id)
+        _append_unique_casefold(machine_id_map[key], machine_id)
 
     for row in db.query(MasterSupportArea).order_by(MasterSupportArea.created_at.asc(), MasterSupportArea.id.asc()).all():
         area = _clean_text(row.support_area)
@@ -511,8 +511,7 @@ def _build_master_data(db: Session) -> Dict[str, object]:
             support_area_lookup[area.lower()] = canonical_area
             support_areas.append(canonical_area)
         support_area_map.setdefault(canonical_area, [])
-        if machine.lower() not in [m.lower() for m in support_area_map[canonical_area]]:
-            support_area_map[canonical_area].append(machine)
+        _append_unique_casefold(support_area_map[canonical_area], machine)
 
     machine_list = sorted(machine_names, key=lambda x: x.lower())
     for machine in machine_list:
@@ -565,26 +564,21 @@ def _add_master_audit(db: Session,
 
 def _get_master_rows_sorted(db: Session, sort_time: str) -> Dict[str, list]:
     newest = sort_time != "asc"
-    if newest:
-        return {
-            "line_rows": db.query(MasterLine).order_by(MasterLine.created_at.desc(), MasterLine.id.desc()).all(),
-            "machine_rows": db.query(MasterMachine).order_by(MasterMachine.created_at.desc(), MasterMachine.id.desc()).all(),
-            "machine_type_rows": db.query(MasterMachineType).order_by(MasterMachineType.created_at.desc(), MasterMachineType.id.desc()).all(),
-            "machine_id_rows": db.query(MasterMachineId).order_by(MasterMachineId.created_at.desc(), MasterMachineId.id.desc()).all(),
-            "support_area_rows": db.query(MasterSupportArea).order_by(MasterSupportArea.created_at.desc(), MasterSupportArea.id.desc()).all(),
-            "support_area_map_rows": db.query(MasterSupportAreaMap).order_by(MasterSupportAreaMap.created_at.desc(), MasterSupportAreaMap.id.desc()).all(),
-            "problem_rows": db.query(MasterProblem).order_by(MasterProblem.created_at.desc(), MasterProblem.id.desc()).all(),
-            "audit_rows": db.query(MasterAuditLog).order_by(MasterAuditLog.created_at.desc(), MasterAuditLog.id.desc()).all(),
-        }
+
+    def _rows(model):
+        if newest:
+            return db.query(model).order_by(model.created_at.desc(), model.id.desc()).all()
+        return db.query(model).order_by(model.created_at.asc(), model.id.asc()).all()
+
     return {
-        "line_rows": db.query(MasterLine).order_by(MasterLine.created_at.asc(), MasterLine.id.asc()).all(),
-        "machine_rows": db.query(MasterMachine).order_by(MasterMachine.created_at.asc(), MasterMachine.id.asc()).all(),
-        "machine_type_rows": db.query(MasterMachineType).order_by(MasterMachineType.created_at.asc(), MasterMachineType.id.asc()).all(),
-        "machine_id_rows": db.query(MasterMachineId).order_by(MasterMachineId.created_at.asc(), MasterMachineId.id.asc()).all(),
-        "support_area_rows": db.query(MasterSupportArea).order_by(MasterSupportArea.created_at.asc(), MasterSupportArea.id.asc()).all(),
-        "support_area_map_rows": db.query(MasterSupportAreaMap).order_by(MasterSupportAreaMap.created_at.asc(), MasterSupportAreaMap.id.asc()).all(),
-        "problem_rows": db.query(MasterProblem).order_by(MasterProblem.created_at.asc(), MasterProblem.id.asc()).all(),
-        "audit_rows": db.query(MasterAuditLog).order_by(MasterAuditLog.created_at.asc(), MasterAuditLog.id.asc()).all(),
+        "line_rows": _rows(MasterLine),
+        "machine_rows": _rows(MasterMachine),
+        "machine_type_rows": _rows(MasterMachineType),
+        "machine_id_rows": _rows(MasterMachineId),
+        "support_area_rows": _rows(MasterSupportArea),
+        "support_area_map_rows": _rows(MasterSupportAreaMap),
+        "problem_rows": _rows(MasterProblem),
+        "audit_rows": _rows(MasterAuditLog),
     }
 
 from python.routes.web_routes import register_web_routes

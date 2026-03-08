@@ -217,9 +217,20 @@ def get_db():
 
 
 def _ensure_columns_and_indexes() -> None:
+    def _table_columns(con, table_name: str) -> set[str]:
+        if engine.dialect.name == "sqlite":
+            query = f"PRAGMA table_info({table_name})"
+            return {row[1] for row in con.exec_driver_sql(query).fetchall()}
+        query = (
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND table_name = :table_name"
+        )
+        rows = con.execute(text(query), {"table_name": table_name}).fetchall()
+        return {str(row[0]) for row in rows}
+
     with engine.begin() as con:
         if engine.dialect.name == "sqlite":
-            cols = {row[1] for row in con.exec_driver_sql("PRAGMA table_info(tickets)").fetchall()}
+            cols = _table_columns(con, "tickets")
             need = {
                 "equipment": "TEXT",
                 "machine_id": "TEXT",
@@ -241,16 +252,19 @@ def _ensure_columns_and_indexes() -> None:
                 if column_name not in cols:
                     con.exec_driver_sql(f"ALTER TABLE tickets ADD COLUMN {column_name} {column_type}")
 
-            user_cols = {row[1] for row in con.exec_driver_sql("PRAGMA table_info(users)").fetchall()}
+            user_cols = _table_columns(con, "users")
             if "password_plain" not in user_cols:
                 con.exec_driver_sql("ALTER TABLE users ADD COLUMN password_plain TEXT")
         else:
             con.exec_driver_sql("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_plain TEXT")
 
-        con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status)")
-        con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(closed_at)")
-        con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_machine ON tickets(machine)")
-        con.exec_driver_sql("CREATE INDEX IF NOT EXISTS idx_tickets_machine_id ON tickets(machine_id)")
+        for index_sql in (
+            "CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status)",
+            "CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(closed_at)",
+            "CREATE INDEX IF NOT EXISTS idx_tickets_machine ON tickets(machine)",
+            "CREATE INDEX IF NOT EXISTS idx_tickets_machine_id ON tickets(machine_id)",
+        ):
+            con.exec_driver_sql(index_sql)
 
 
 def _ensure_postgres_iot_tables() -> None:
@@ -279,44 +293,21 @@ def _ensure_postgres_iot_tables() -> None:
             )
             """
         )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_measurements "
-            "ADD COLUMN IF NOT EXISTS broker VARCHAR(255)"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_measurements "
-            "ADD COLUMN IF NOT EXISTS topic VARCHAR(255)"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_measurements "
-            "ADD COLUMN IF NOT EXISTS mqtt_client VARCHAR(255)"
-        )
-        con.exec_driver_sql(
-            "DROP INDEX IF EXISTS idx_iot_monitor_measurements_machine_time"
-        )
-        con.exec_driver_sql(
-            "DROP INDEX IF EXISTS idx_iot_monitor_measurements_line_time"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_measurements "
-            "DROP COLUMN IF EXISTS source_topic"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_measurements "
-            "DROP COLUMN IF EXISTS line_no"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_measurements "
-            "DROP COLUMN IF EXISTS machine"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_measurements "
-            "DROP COLUMN IF EXISTS machine_type"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_measurements "
-            "DROP COLUMN IF EXISTS machine_id"
-        )
+        for col_name in ("broker", "topic", "mqtt_client"):
+            con.exec_driver_sql(
+                "ALTER TABLE public.iot_monitor_measurements "
+                f"ADD COLUMN IF NOT EXISTS {col_name} VARCHAR(255)"
+            )
+        for index_name in (
+            "idx_iot_monitor_measurements_machine_time",
+            "idx_iot_monitor_measurements_line_time",
+        ):
+            con.exec_driver_sql(f"DROP INDEX IF EXISTS {index_name}")
+        for legacy_col in ("source_topic", "line_no", "machine", "machine_type", "machine_id"):
+            con.exec_driver_sql(
+                "ALTER TABLE public.iot_monitor_measurements "
+                f"DROP COLUMN IF EXISTS {legacy_col}"
+            )
         con.exec_driver_sql(
             """
             CREATE INDEX IF NOT EXISTS idx_iot_monitor_measurements_recorded_at
@@ -341,42 +332,21 @@ def _ensure_postgres_iot_tables() -> None:
             )
             """
         )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_status_logs "
-            "ADD COLUMN IF NOT EXISTS broker VARCHAR(255)"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_status_logs "
-            "ADD COLUMN IF NOT EXISTS topic VARCHAR(255)"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_status_logs "
-            "ADD COLUMN IF NOT EXISTS mqtt_client VARCHAR(255)"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_status_logs "
-            "ADD COLUMN IF NOT EXISTS connected BOOLEAN NOT NULL DEFAULT FALSE"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_status_logs "
-            "ADD COLUMN IF NOT EXISTS last_message_at TIMESTAMPTZ"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_status_logs "
-            "ADD COLUMN IF NOT EXISTS message_count BIGINT NOT NULL DEFAULT 0"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_status_logs "
-            "ADD COLUMN IF NOT EXISTS parse_error_count BIGINT NOT NULL DEFAULT 0"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_status_logs "
-            "ADD COLUMN IF NOT EXISTS last_payload TEXT"
-        )
-        con.exec_driver_sql(
-            "ALTER TABLE public.iot_monitor_status_logs "
-            "ADD COLUMN IF NOT EXISTS last_error TEXT"
-        )
+        for col_name, col_type in (
+            ("broker", "VARCHAR(255)"),
+            ("topic", "VARCHAR(255)"),
+            ("mqtt_client", "VARCHAR(255)"),
+            ("connected", "BOOLEAN NOT NULL DEFAULT FALSE"),
+            ("last_message_at", "TIMESTAMPTZ"),
+            ("message_count", "BIGINT NOT NULL DEFAULT 0"),
+            ("parse_error_count", "BIGINT NOT NULL DEFAULT 0"),
+            ("last_payload", "TEXT"),
+            ("last_error", "TEXT"),
+        ):
+            con.exec_driver_sql(
+                "ALTER TABLE public.iot_monitor_status_logs "
+                f"ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
+            )
         con.exec_driver_sql(
             """
             CREATE INDEX IF NOT EXISTS idx_iot_monitor_status_logs_recorded_at
@@ -755,11 +725,13 @@ def _ensure_postgres_add_machine_tables() -> None:
             """
         )
 
-    with engine.begin() as con:
-        _rebuild_table(
-            con,
-            "add_machine_support_area_table",
-            """
+    table_specs = (
+        {
+            "table_name": "add_machine_support_area_table",
+            "source_table": "master_support_areas",
+            "refresh_fn": "refresh_am_support_area_table",
+            "trigger_name": "trg_refresh_am_support_area",
+            "select_sql": """
             SELECT
                 coalesce(sa.support_area, '-') AS "Support Area",
                 to_char(sa.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
@@ -767,14 +739,13 @@ def _ensure_postgres_add_machine_tables() -> None:
             FROM public.master_support_areas sa
             ORDER BY sa.created_at ASC, sa.id ASC
             """,
-            "master_support_areas",
-            "refresh_am_support_area_table",
-            "trg_refresh_am_support_area",
-        )
-        _rebuild_table(
-            con,
-            "add_machine_support_area_to_machine_table",
-            """
+        },
+        {
+            "table_name": "add_machine_support_area_to_machine_table",
+            "source_table": "master_support_area_maps",
+            "refresh_fn": "refresh_am_support_area_to_machine_table",
+            "trigger_name": "trg_refresh_am_support_area_to_machine",
+            "select_sql": """
             SELECT
                 coalesce(sm.support_area, '-') AS "Support Area",
                 coalesce(sm.machine, '-') AS "Machine",
@@ -783,14 +754,13 @@ def _ensure_postgres_add_machine_tables() -> None:
             FROM public.master_support_area_maps sm
             ORDER BY sm.created_at ASC, sm.id ASC
             """,
-            "master_support_area_maps",
-            "refresh_am_support_area_to_machine_table",
-            "trg_refresh_am_support_area_to_machine",
-        )
-        _rebuild_table(
-            con,
-            "add_machine_line_no_table",
-            """
+        },
+        {
+            "table_name": "add_machine_line_no_table",
+            "source_table": "master_lines",
+            "refresh_fn": "refresh_am_line_no_table",
+            "trigger_name": "trg_refresh_am_line_no",
+            "select_sql": """
             SELECT
                 coalesce(l.line_no, '-') AS "Line No.",
                 to_char(l.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
@@ -798,14 +768,13 @@ def _ensure_postgres_add_machine_tables() -> None:
             FROM public.master_lines l
             ORDER BY l.line_no ASC
             """,
-            "master_lines",
-            "refresh_am_line_no_table",
-            "trg_refresh_am_line_no",
-        )
-        _rebuild_table(
-            con,
-            "add_machine_machine_table",
-            """
+        },
+        {
+            "table_name": "add_machine_machine_table",
+            "source_table": "master_machines",
+            "refresh_fn": "refresh_am_machine_table",
+            "trigger_name": "trg_refresh_am_machine",
+            "select_sql": """
             SELECT
                 coalesce(m.machine, '-') AS "Machine",
                 to_char(m.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
@@ -813,14 +782,13 @@ def _ensure_postgres_add_machine_tables() -> None:
             FROM public.master_machines m
             ORDER BY m.machine ASC
             """,
-            "master_machines",
-            "refresh_am_machine_table",
-            "trg_refresh_am_machine",
-        )
-        _rebuild_table(
-            con,
-            "add_machine_machine_type_table",
-            """
+        },
+        {
+            "table_name": "add_machine_machine_type_table",
+            "source_table": "master_machine_types",
+            "refresh_fn": "refresh_am_machine_type_table",
+            "trigger_name": "trg_refresh_am_machine_type",
+            "select_sql": """
             SELECT
                 coalesce(mt.machine, '-') AS "Machine",
                 coalesce(mt.machine_type, '-') AS "Machine Type",
@@ -829,14 +797,13 @@ def _ensure_postgres_add_machine_tables() -> None:
             FROM public.master_machine_types mt
             ORDER BY mt.machine ASC, mt.machine_type ASC
             """,
-            "master_machine_types",
-            "refresh_am_machine_type_table",
-            "trg_refresh_am_machine_type",
-        )
-        _rebuild_table(
-            con,
-            "add_machine_machine_id_table",
-            """
+        },
+        {
+            "table_name": "add_machine_machine_id_table",
+            "source_table": "master_machine_ids",
+            "refresh_fn": "refresh_am_machine_id_table",
+            "trigger_name": "trg_refresh_am_machine_id",
+            "select_sql": """
             SELECT
                 coalesce(mi.machine, '-') AS "Machine",
                 coalesce(mi.machine_type, '-') AS "Machine Type",
@@ -846,14 +813,13 @@ def _ensure_postgres_add_machine_tables() -> None:
             FROM public.master_machine_ids mi
             ORDER BY mi.machine ASC, mi.machine_type ASC, mi.machine_id ASC
             """,
-            "master_machine_ids",
-            "refresh_am_machine_id_table",
-            "trg_refresh_am_machine_id",
-        )
-        _rebuild_table(
-            con,
-            "add_machine_problem_table",
-            """
+        },
+        {
+            "table_name": "add_machine_problem_table",
+            "source_table": "master_problems",
+            "refresh_fn": "refresh_am_problem_table",
+            "trigger_name": "trg_refresh_am_problem",
+            "select_sql": """
             SELECT
                 coalesce(p.machine, '-') AS "Machine",
                 coalesce(nullif(p.machine_type, ''), '-') AS "Machine Type",
@@ -863,14 +829,13 @@ def _ensure_postgres_add_machine_tables() -> None:
             FROM public.master_problems p
             ORDER BY p.machine ASC, p.machine_type ASC, p.problem ASC
             """,
-            "master_problems",
-            "refresh_am_problem_table",
-            "trg_refresh_am_problem",
-        )
-        _rebuild_table(
-            con,
-            "add_machine_update_history_table",
-            """
+        },
+        {
+            "table_name": "add_machine_update_history_table",
+            "source_table": "master_audit_logs",
+            "refresh_fn": "refresh_am_update_history_table",
+            "trigger_name": "trg_refresh_am_update_history",
+            "select_sql": """
             SELECT
                 to_char(a.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
                 coalesce(a.actor, '-') AS "User",
@@ -881,10 +846,19 @@ def _ensure_postgres_add_machine_tables() -> None:
             FROM public.master_audit_logs a
             ORDER BY a.created_at DESC, a.id DESC
             """,
-            "master_audit_logs",
-            "refresh_am_update_history_table",
-            "trg_refresh_am_update_history",
-        )
+        },
+    )
+
+    with engine.begin() as con:
+        for spec in table_specs:
+            _rebuild_table(
+                con,
+                spec["table_name"],
+                spec["select_sql"],
+                spec["source_table"],
+                spec["refresh_fn"],
+                spec["trigger_name"],
+            )
 
         _refresh_postgres_line_to_monitoring_page_table(con)
 
