@@ -1,6 +1,6 @@
-﻿<!doctype html>
+<!doctype html>
 <meta charset="utf-8">
-<title>Manage Users â€” SupportHub</title>
+<title>Manage Users - SupportHub</title>
 <style>
   :root{ --bg:#f6f7fb; --card:#ffffff; --line:#e7e7ee; --muted:#6B7280; }
   *{ box-sizing:border-box }
@@ -19,7 +19,6 @@
   colgroup col.col-user{ width: 10ch }
   colgroup col.col-role{ width: 12ch }
   colgroup col.col-pass{ width: 18ch }
-  colgroup col.col-actual{ width: 16ch }
   colgroup col.col-created{ width: 20ch }
   colgroup col.col-action{ width: 14ch }
   th, td{ padding:10px; border-bottom:1px solid var(--line); vertical-align:middle; text-align:left; white-space:nowrap; }
@@ -76,7 +75,6 @@
       <col class="col-user">
       <col class="col-role">
       <col class="col-pass">
-      <col class="col-actual">
       <col class="col-created">
       <col class="col-action">
     </colgroup>
@@ -85,7 +83,6 @@
         <th>Username</th>
         <th>Role</th>
         <th>Set New Password</th>
-        <th>Actual Password</th>
         <th>Created</th>
         <th>Action</th>
       </tr>
@@ -111,11 +108,7 @@
         </td>
 
         <td>
-          <input type="text" value="{{ u.password_plain if (me.username|upper == 'ADMIN' and u.password_plain) else '-' }}" readonly title="Visible for ADMIN user.">
-        </td>
-
-        <td>
-          <!-- à¹ƒà¸Šà¹‰à¹€à¸§à¸¥à¸²à¹„à¸—à¸¢ + à¸£à¸¹à¸›à¹à¸šà¸š à¸§à¸±à¸™-à¹€à¸”à¸·à¸­à¸™-à¸›à¸µ -->
+          <!-- Thai timezone + dd-mm-yyyy format -->
           <div class="muted">{{ fmt_th(u.created_at) }}</div>
         </td>
 

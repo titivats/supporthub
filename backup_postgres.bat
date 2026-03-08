@@ -33,6 +33,13 @@ if /I not "%URL_HEAD_A%"=="postgresql://" (
   )
 )
 
+echo %SUPPORTHUB_DATABASE_URL% | find /I "CHANGE_ME_PASSWORD" >nul
+if not errorlevel 1 (
+  echo [ERROR] SUPPORTHUB_DATABASE_URL still contains CHANGE_ME_PASSWORD.
+  echo [ERROR] Update database password in web.config before backup.
+  goto :END
+)
+
 set "PG_DUMP_URL=%SUPPORTHUB_DATABASE_URL:postgresql+psycopg://=postgresql://%"
 
 pg_dump --version >nul 2>&1

@@ -36,7 +36,8 @@ def _safe_float(v: Any) -> float | None:
 
 
 def _extract_numeric(obj: Any, prefix: str = "", out: Dict[str, float] | None = None) -> Dict[str, float]:
-    out = out or {}
+    if out is None:
+        out = {}
     if isinstance(obj, dict):
         for k, v in obj.items():
             key = f"{prefix}.{k}" if prefix else str(k)
@@ -51,6 +52,30 @@ def _extract_numeric(obj: Any, prefix: str = "", out: Dict[str, float] | None = 
     if num is not None:
         out[prefix or "value"] = num
     return out
+
+
+def _normalize_metric_key(value: str) -> str:
+    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
+
+
+def _pick_metric_value(numeric_map: Dict[str, float], aliases: tuple[str, ...]) -> float | None:
+    if not numeric_map:
+        return None
+
+    alias_keys = {_normalize_metric_key(a) for a in aliases if a}
+    if not alias_keys:
+        return None
+
+    for key, val in numeric_map.items():
+        if _normalize_metric_key(key) in alias_keys:
+            return float(val)
+
+    for key, val in numeric_map.items():
+        normalized_key = _normalize_metric_key(key)
+        for alias in alias_keys:
+            if normalized_key.endswith(alias):
+                return float(val)
+    return None
 
 
 @dataclass
@@ -92,6 +117,26 @@ class IoTMonitorService:
             "parse_error_count": int(self.parse_error_count),
             "last_payload": self.last_payload,
             "last_error": self.last_error,
+        }
+
+    def _build_measurement_row(
+        self,
+        recorded_at: datetime,
+        payload: str,
+        numeric_map: Dict[str, float],
+    ) -> Dict[str, Any]:
+        return {
+            "recorded_at": recorded_at,
+            "broker": f"{self.host}:{self.port}",
+            "topic": self.topic,
+            "mqtt_client": self.client_id,
+            "voltage": _pick_metric_value(numeric_map, ("voltage", "volt")),
+            "current": _pick_metric_value(numeric_map, ("current", "ampere", "amps")),
+            "power": _pick_metric_value(numeric_map, ("power", "watt")),
+            "power_factor": _pick_metric_value(numeric_map, ("powerfactor", "pf")),
+            "energy": _pick_metric_value(numeric_map, ("energy", "kwh", "wh")),
+            "frequency": _pick_metric_value(numeric_map, ("frequency", "freq", "hz")),
+            "raw_payload": payload or None,
         }
 
     def _insert_status_log_row(self, row: Dict[str, Any]) -> None:
@@ -138,6 +183,55 @@ class IoTMonitorService:
             except Exception:
                 pass
             print(f"[IOT] failed to insert status log: {exc}")
+        finally:
+            db.close()
+
+    def _insert_measurement_row(self, row: Dict[str, Any]) -> None:
+        if engine.dialect.name != "postgresql":
+            return
+
+        db = SessionLocal()
+        try:
+            db.execute(
+                text(
+                    """
+                    INSERT INTO public.iot_monitor_measurements (
+                        recorded_at,
+                        broker,
+                        topic,
+                        mqtt_client,
+                        voltage,
+                        current,
+                        power,
+                        power_factor,
+                        energy,
+                        frequency,
+                        raw_payload
+                    )
+                    VALUES (
+                        :recorded_at,
+                        :broker,
+                        :topic,
+                        :mqtt_client,
+                        :voltage,
+                        :current,
+                        :power,
+                        :power_factor,
+                        :energy,
+                        :frequency,
+                        :raw_payload
+                    )
+                    """
+                ),
+                row,
+            )
+            db.commit()
+        except Exception as exc:
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            print(f"[IOT] failed to insert measurement row: {exc}")
         finally:
             db.close()
 
@@ -264,6 +358,7 @@ class IoTMonitorService:
                 numeric_map = {}
 
         status_row: Dict[str, Any]
+        measurement_row: Dict[str, Any]
         with self._lock:
             self.last_payload = payload or "-"
             self.last_message_at = now
@@ -278,7 +373,9 @@ class IoTMonitorService:
                         self.series[key] = deque(maxlen=self.sample_limit)
                     self.series[key].append(_Sample(ts=now, value=val))
             status_row = self._build_status_log_row(now)
+            measurement_row = self._build_measurement_row(now, payload, numeric_map)
         self._insert_status_log_row(status_row)
+        self._insert_measurement_row(measurement_row)
 
 
 iot_monitor = IoTMonitorService()

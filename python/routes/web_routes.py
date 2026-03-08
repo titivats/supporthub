@@ -47,12 +47,19 @@ def register_web_routes(app, templates, deps):
     iot_monitor = deps["iot_monitor"]
     LINE_MACHINE_ITEM_SEPARATOR = "|||"
     USERNAME_NUMERIC_PATTERN = re.compile(r"^\d{6}$")
+    ALLOWED_ROLES = ("Operator", "Engineer", "Technician", "Admin")
+    PUBLIC_SIGNUP_ROLES = ("Operator", "Engineer", "Technician")
 
     def _is_valid_manage_username(username: str) -> bool:
         return bool(USERNAME_NUMERIC_PATTERN.fullmatch((username or "").strip()))
 
     def _is_valid_manage_password(password: str) -> bool:
         return 1 <= len((password or "")) <= 12
+
+    def _normalize_role(role: Optional[str], allow_admin: bool) -> str:
+        raw = (role or "").strip()
+        allowed = ALLOWED_ROLES if allow_admin else PUBLIC_SIGNUP_ROLES
+        return raw if raw in allowed else ""
 
     def _split_line_monitoring_item(raw_item: Optional[str]) -> tuple[str, str]:
         item = _clean_text(raw_item)
@@ -432,9 +439,8 @@ def register_web_routes(app, templates, deps):
             return templates.TemplateResponse("add_user.html", {"request": request, "error": "Password and Confirm Password do not match."}, status_code=400)
         if db.query(User).filter(User.username == username).first():
             return templates.TemplateResponse("add_user.html", {"request": request, "error": "Username already exists."}, status_code=400)
-        role = (role or "").strip() or "Operator"
-        password_plain = password
-        db.add(User(username=username, password_hash=sha256(password), password_plain=password_plain, role=role)); db.commit()
+        role = _normalize_role(role, allow_admin=False) or "Operator"
+        db.add(User(username=username, password_hash=sha256(password), role=role)); db.commit()
         return RedirectResponse("/login?created=1", status_code=303)
     
     # ---------- Admin: Users ----------
@@ -464,9 +470,10 @@ def register_web_routes(app, templates, deps):
             raise HTTPException(status_code=400, detail="password must be up to 12 characters")
         if db.query(User).filter(User.username == username).first():
             raise HTTPException(status_code=400, detail="duplicated")
-        role = (role or "").strip()
-        password_plain = password
-        u = User(username=username, password_hash=sha256(password), password_plain=password_plain, role=role)
+        role = _normalize_role(role, allow_admin=True)
+        if not role:
+            raise HTTPException(status_code=400, detail="invalid role")
+        u = User(username=username, password_hash=sha256(password), role=role)
         db.add(u); db.commit()
         return RedirectResponse("/admin/users", status_code=303)
     
@@ -483,15 +490,15 @@ def register_web_routes(app, templates, deps):
         if u.username.upper() == "ADMIN" and (me.username.upper() != "ADMIN"):
             raise HTTPException(status_code=403, detail="Cannot edit ADMIN")
     
-        role = (role or "").strip()
+        role = _normalize_role(role, allow_admin=True)
+        if not role:
+            raise HTTPException(status_code=400, detail="invalid role")
         u.role = role
         new_password_val = (new_password or "").strip()
         if new_password_val:
             if not _is_valid_manage_password(new_password_val):
                 raise HTTPException(status_code=400, detail="password must be up to 12 characters")
             u.password_hash = sha256(new_password_val)
-            u.password_plain = new_password_val
-            u.created_at = datetime.utcnow()
             db.add(u); db.commit()
             return RedirectResponse("/admin/users?pw_updated=1", status_code=303)
 
@@ -1135,7 +1142,7 @@ def register_web_routes(app, templates, deps):
     def create_request(
         request: Request,
         machine: str = Form(...),               # Line No.
-        equipment: Optional[str] = Form(None),  # Machine (type||brand) à¸«à¸£à¸·à¸­ brand à¹€à¸”à¸µà¹ˆà¸¢à¸§
+        equipment: Optional[str] = Form(None),  # Machine (type||brand) or brand only
         machine_id: Optional[str] = Form(None),
         problem: Optional[str] = Form(None),
         description: Optional[str] = Form(None),
@@ -1151,7 +1158,7 @@ def register_web_routes(app, templates, deps):
             description=(description or "").strip() or None,
         )
         db.add(t); db.commit()
-        bump_active_version()  # <<<<<< à¸ªà¸³à¸„à¸±à¸: à¸à¸£à¸°à¸•à¸¸à¹‰à¸™à¹ƒà¸«à¹‰à¸«à¸™à¹‰à¸² Active à¸£à¸µà¹‚à¸«à¸¥à¸”
+        bump_active_version()  # important: notify Active Tickets page to refresh quickly
         line_notify(f"[REQUEST] {t.machine} | {t.equipment or '-'} | {t.machine_id or '-'} | {t.problem or '-'} by {t.requester}")
         return RedirectResponse("/", status_code=303)
     
@@ -1189,20 +1196,23 @@ def register_web_routes(app, templates, deps):
     
         if ticket.status in ("DOING", "HOLD") and act == "done":
             if ticket.current_actor and ticket.current_actor != actor.username:
-                raise HTTPException(status_code=409, detail=f"Username à¹„à¸¡à¹ˆà¸•à¸£à¸‡à¸à¸±à¸šà¸„à¸™à¸›à¸à¸´à¸šà¸±à¸•à¸´à¸‡à¸²à¸™à¸­à¸¢à¸¹à¹ˆ ({ticket.current_actor})")
-    
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Username does not match current actor ({ticket.current_actor})",
+                )
+
         if act == "takeover":
             if ticket.status not in ("DOING", "HOLD"):
-                raise HTTPException(status_code=409, detail="Takeover à¹„à¸”à¹‰à¹€à¸‰à¸žà¸²à¸°à¸ªà¸–à¸²à¸™à¸° DOING à¸«à¸£à¸·à¸­ HOLD")
+                raise HTTPException(status_code=409, detail="Takeover is allowed only in DOING or HOLD status")
             if ticket.current_actor and ticket.current_actor == actor.username:
-                raise HTTPException(status_code=409, detail="à¸„à¸¸à¸“à¹€à¸›à¹‡à¸™à¸œà¸¹à¹‰à¸›à¸à¸´à¸šà¸±à¸•à¸´à¸‡à¸²à¸™à¸„à¸™à¸›à¸±à¸ˆà¸ˆà¸¸à¸šà¸±à¸™à¸­à¸¢à¸¹à¹ˆà¹à¸¥à¹‰à¸§")
-    
+                raise HTTPException(status_code=409, detail="You are already the current actor")
+
         if act == "done" and ticket.status == "PENDING":
-            raise HTTPException(status_code=409, detail="à¸•à¹‰à¸­à¸‡à¸à¸” Doing à¸à¹ˆà¸­à¸™ Done")
+            raise HTTPException(status_code=409, detail="Press Doing before Done")
         if act == "doing" and ticket.status == "DOING":
-            raise HTTPException(status_code=409, detail="à¹„à¸¡à¹ˆà¸ªà¸²à¸¡à¸²à¸£à¸–à¸à¸” Doing à¸‹à¹‰à¸³à¹€à¸žà¸·à¹ˆà¸­à¹€à¸£à¸´à¹ˆà¸¡à¸™à¸±à¸šà¹€à¸§à¸¥à¸²à¹ƒà¸«à¸¡à¹ˆà¹„à¸”à¹‰")
+            raise HTTPException(status_code=409, detail="Cannot press Doing again while already DOING")
         if act == "hold" and ticket.status == "HOLD":
-            raise HTTPException(status_code=409, detail="à¹„à¸¡à¹ˆà¸ªà¸²à¸¡à¸²à¸£à¸–à¸à¸” Hold à¸‹à¹‰à¸³à¹€à¸žà¸·à¹ˆà¸­à¹€à¸£à¸´à¹ˆà¸¡à¸™à¸±à¸šà¹€à¸§à¸¥à¸²à¹ƒà¸«à¸¡à¹ˆà¹„à¸”à¹‰")
+            raise HTTPException(status_code=409, detail="Cannot press Hold again while already HOLD")
     
         if act == "doing":
             ticket.start_doing()
@@ -1210,19 +1220,19 @@ def register_web_routes(app, templates, deps):
             ticket.last_action = "doing"
         elif act == "hold":
             if not (reason and reason.strip()):
-                raise HTTPException(status_code=400, detail="à¸à¸£à¸­à¸à¹€à¸«à¸•à¸¸à¸œà¸¥ Hold")
+                raise HTTPException(status_code=400, detail="Please provide Hold reason")
             ticket.start_hold(reason.strip())
             ticket.current_actor = actor.username
             ticket.last_action = "hold"
         elif act == "done":
             if not (solution and solution.strip()):
-                raise HTTPException(status_code=400, detail="à¸à¸£à¸­à¸ Solution à¸à¹ˆà¸­à¸™ Done")
+                raise HTTPException(status_code=400, detail="Please provide Solution before Done")
             ticket.done(solution.strip(), by=actor.username)
             ticket.current_actor = None
             ticket.last_action = "done"
         elif act == "cancel":
             if not (reason and reason.strip()):
-                raise HTTPException(status_code=400, detail="à¸à¸£à¸­à¸à¹€à¸«à¸•à¸¸à¸œà¸¥ Cancel")
+                raise HTTPException(status_code=400, detail="Please provide Cancel reason")
             ticket.cancel(reason.strip(), by=actor.username)
             ticket.current_actor = None
             ticket.last_action = "cancel"
@@ -1240,7 +1250,7 @@ def register_web_routes(app, templates, deps):
             raise HTTPException(status_code=400, detail="invalid action")
     
         db.add(ticket); db.commit()
-        bump_active_version()  # <<<<<< à¸ªà¸³à¸„à¸±à¸: à¸à¸£à¸°à¸•à¸¸à¹‰à¸™à¹ƒà¸«à¹‰à¸«à¸™à¹‰à¸² Active à¸£à¸µà¹‚à¸«à¸¥à¸”
+        bump_active_version()  # important: notify Active Tickets page to refresh quickly
         return {
             "ok": True,
             "id": ticket.id,

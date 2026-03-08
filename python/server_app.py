@@ -75,7 +75,7 @@ def current_active_version():
 
 @app.get("/api/active/version")
 def api_active_version():
-    # à¹ƒà¸Šà¹‰à¸à¸±à¸šà¸ªà¸„à¸£à¸´à¸›à¸•à¹Œà¸«à¸™à¹‰à¸² index.html à¹€à¸žà¸·à¹ˆà¸­à¸•à¸£à¸§à¸ˆà¸à¸²à¸£à¹€à¸›à¸¥à¸µà¹ˆà¸¢à¸™à¹à¸›à¸¥à¸‡à¹à¸šà¸šà¹€à¸šà¸²à¹†
+    # Used by index.html polling script for lightweight active-ticket refresh.
     return {"version": current_active_version()}
 
 # ---------- Master data ----------

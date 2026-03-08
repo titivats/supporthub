@@ -31,7 +31,6 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(50), nullable=False)
     password_hash = Column(String(128), nullable=False)
-    password_plain = Column(String(255), nullable=True)
     role = Column(String(20), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     __table_args__ = (UniqueConstraint("username", name="uq_username"),)
@@ -227,9 +226,8 @@ def _ensure_columns_and_indexes() -> None:
                 "ALTER TABLE public.tickets "
                 f"ADD COLUMN IF NOT EXISTS {column_name} {column_type}"
             )
-        con.exec_driver_sql(
-            "ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password_plain TEXT"
-        )
+        # plaintext password storage is intentionally removed for security.
+        con.exec_driver_sql("ALTER TABLE public.users DROP COLUMN IF EXISTS password_plain")
 
         for index_sql in (
             "CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status)",
@@ -496,7 +494,6 @@ def _ensure_postgres_manage_users_table() -> None:
         coalesce(u.username, '-') AS "Username",
         coalesce(u.role, '-') AS "Role",
         ''::text AS "Set New Password",
-        coalesce(nullif(u.password_plain, ''), '-') AS "Actual Password",
         to_char(u.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
         ''::text AS "Action"
     FROM public.users u
@@ -528,7 +525,6 @@ def _ensure_postgres_manage_users_table() -> None:
                     coalesce(u.username, '-') AS "Username",
                     coalesce(u.role, '-') AS "Role",
                     ''::text AS "Set New Password",
-                    coalesce(nullif(u.password_plain, ''), '-') AS "Actual Password",
                     to_char(u.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
                     ''::text AS "Action"
                 FROM public.users u
@@ -841,20 +837,17 @@ def _ensure_admin_user() -> None:
     try:
         db = SessionLocal()
         admin = db.query(User).filter(User.username == "ADMIN").first()
-        target_plain = "259487123"
-        target_hash = sha256("259487123")
         if not admin:
-            db.add(User(username="ADMIN", password_hash=target_hash, password_plain=target_plain, role="Admin"))
+            bootstrap_password = (os.getenv("SUPPORTHUB_BOOTSTRAP_ADMIN_PASSWORD") or "").strip()
+            if not bootstrap_password:
+                raise RuntimeError(
+                    "ADMIN user is missing. Set SUPPORTHUB_BOOTSTRAP_ADMIN_PASSWORD once to bootstrap ADMIN."
+                )
+            db.add(User(username="ADMIN", password_hash=sha256(bootstrap_password), role="Admin"))
             db.commit()
             return
 
         changed = False
-        if admin.password_hash != target_hash:
-            admin.password_hash = target_hash
-            changed = True
-        if (admin.password_plain or "") != target_plain:
-            admin.password_plain = target_plain
-            changed = True
         if admin.role != "Admin":
             admin.role = "Admin"
             changed = True

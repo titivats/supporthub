@@ -60,6 +60,14 @@ if /I not "%URL_HEAD_A%"=="postgresql://" (
   )
 )
 
+echo %SUPPORTHUB_DATABASE_URL% | find /I "CHANGE_ME_PASSWORD" >nul
+if not errorlevel 1 (
+  echo [ERROR] SUPPORTHUB_DATABASE_URL still contains CHANGE_ME_PASSWORD.
+  echo [ERROR] Update database password in: %WEB_CONFIG%
+  echo [ERROR] SUPPORTHUB_DATABASE_URL contains CHANGE_ME_PASSWORD. >> "%LOGFILE%"
+  goto :END
+)
+
 echo.
 echo === SupportHub OFFLINE start (wheels only) ===
 echo Project : %PROJ%
