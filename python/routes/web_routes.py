@@ -194,13 +194,11 @@ def register_web_routes(app, templates, deps):
                 entry_type = entry.get("item_type", "")
                 entry_type_l = entry.get("item_type_l", "")
                 if entry_machine_id:
-                    if any(c and c == entry_machine_id for c in candidates):
+                    id_match = any(c and c == entry_machine_id for c in candidates)
+                    type_match = any(c and c == entry_type_l for c in candidates)
+                    if id_match and (not entry_type_l or type_match):
                         matched_item = entry_type or entry.get("machine_id", "")
                         matched_machine_id = entry.get("machine_id", "")
-                        break
-                    if any(c and c == entry_type_l for c in candidates):
-                        matched_item = entry_type
-                        matched_machine_id = ""
                         break
                     continue
                 if any(c and c == entry_type_l for c in candidates):

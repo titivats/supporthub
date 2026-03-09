@@ -41,6 +41,7 @@ def register_ticket_action_routes(app, templates, ctx):
             "equipments": EQUIPMENTS,
             "machine_type_map": master["machine_type_map"],
             "machine_id_map": master["machine_id_map"],
+            "line_machine_map": master.get("line_machine_map", {}),
             "support_areas": master["support_areas"],
             "support_area_map": master["support_area_map"],
             "problem_map": master["problem_map"],
@@ -179,4 +180,3 @@ def register_ticket_action_routes(app, templates, ctx):
             "doing_started_at": ticket.doing_started_at.isoformat() if ticket.doing_started_at else None,
             "hold_started_at": ticket.hold_started_at.isoformat() if ticket.hold_started_at else None,
         }
-

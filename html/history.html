@@ -7,12 +7,23 @@
     :root{ --bg:#f6f7fb; --card:#ffffff; --line:#e7e7ee; --muted:#6B7280; --thead:#f0f2ff; }
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);font-family:system-ui,Segoe UI,Arial}
-    .container{max-width:1400px;margin:26px auto;padding:0 16px}
+    .container{max-width:1760px;margin:26px auto;padding:0 16px}
     .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
     .title{font-size:24px;font-weight:700;margin:0}
     .top-actions{display:flex;gap:8px;flex-wrap:wrap}
     .filters{display:flex;flex-direction:column;gap:10px;margin:8px 0 14px}
-    .filters-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
+    .filters-row{
+      display:flex;
+      flex-wrap:nowrap;
+      gap:10px;
+      align-items:flex-end;
+      overflow-x:auto;
+      padding-bottom:2px;
+    }
+    .filters-row > label,
+    .date-actions-group{
+      flex:0 0 auto;
+    }
     .date-actions-group{display:flex;align-items:flex-end;gap:10px;margin-left:0}
     .date-range-group{display:flex;align-items:flex-end;gap:10px}
     .to-sep{margin-bottom:10px}
