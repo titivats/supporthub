@@ -296,6 +296,7 @@
 <script id="problem-combo-data" type="application/json">{{ problem_combo_map | tojson }}</script>
 <script id="machine-type-data" type="application/json">{{ machine_type_map | tojson }}</script>
 <script id="machine-id-data" type="application/json">{{ machine_id_map | tojson }}</script>
+<script id="line-machine-map-data" type="application/json">{{ line_machine_map | tojson }}</script>
 <script id="support-area-map-data" type="application/json">{{ support_area_map | tojson }}</script>
 <script>
   /* ========= Master data ========= */
@@ -396,6 +397,47 @@
   let machineIdMap = {};
   try{ machineIdMap = JSON.parse(document.getElementById('machine-id-data').textContent || "{}"); }catch(_){ machineIdMap = {}; }
   const lowerKeyMachineIds = (()=>{ const out={}; Object.keys(machineIdMap||{}).forEach(k=>{ out[(k||'').toLowerCase()] = (machineIdMap[k]||[]).slice(); }); return out; })();
+  let lineMachineMap = {};
+  try{ lineMachineMap = JSON.parse(document.getElementById('line-machine-map-data').textContent || "{}"); }catch(_){ lineMachineMap = {}; }
+  const lowerKeyLineMachineMap = (()=>{ const out={}; Object.keys(lineMachineMap||{}).forEach(k=>{ out[(k||'').trim().toLowerCase()] = (lineMachineMap[k]||[]).slice(); }); return out; })();
+
+  const machineByBrand = (() => {
+    const out = {};
+    Object.keys(machineTypeMap || {}).forEach(machine => {
+      (machineTypeMap[machine] || []).forEach(brand => {
+        const key = norm(brand);
+        if(!out[key]) out[key] = [];
+        if(!out[key].includes(machine)) out[key].push(machine);
+      });
+    });
+    return out;
+  })();
+
+  const machineKeyByNorm = (() => {
+    const out = {};
+    Object.keys(machineTypeMap || {}).forEach(machine => {
+      const key = norm(machine);
+      if(key && !out[key]) out[key] = machine;
+    });
+    return out;
+  })();
+
+  const machineBrandById = (() => {
+    const out = {};
+    Object.keys(lowerKeyMachineIds || {}).forEach(key => {
+      const parts = key.split('||');
+      if(parts.length !== 2) return;
+      const machine = (parts[0] || '').trim();
+      const brand = (parts[1] || '').trim();
+      (lowerKeyMachineIds[key] || []).forEach(idVal => {
+        const idKey = norm(idVal);
+        if(!idKey) return;
+        if(!out[idKey]) out[idKey] = [];
+        out[idKey].push({ machine, brand });
+      });
+    });
+    return out;
+  })();
 
   /* ====== Build selects ====== */
   function hideProblemSelect(){
@@ -425,16 +467,92 @@
     return sel ? (sel.value || '') : '';
   }
 
+  function resolveLineScope(lineNo){
+    const out = {
+      hasMapping: false,
+      allowedMachines: new Set(),
+      allowedBrandsByMachine: {},
+      allowedIdsByMachineBrand: {},
+    };
+    const lineKey = norm(lineNo);
+    const rawItems = lowerKeyLineMachineMap[lineKey] || [];
+    if(!rawItems.length) return out;
+    out.hasMapping = true;
+
+    const addMachineBrand = (machine, brand) => {
+      const machineKey = norm(machine);
+      const brandKey = norm(brand);
+      if(!machineKey || !brandKey) return;
+      out.allowedMachines.add(machineKey);
+      if(!out.allowedBrandsByMachine[machineKey]) out.allowedBrandsByMachine[machineKey] = new Set();
+      out.allowedBrandsByMachine[machineKey].add(brandKey);
+    };
+    const addMachineBrandId = (machine, brand, machineId) => {
+      addMachineBrand(machine, brand);
+      const key = `${norm(machine)}||${norm(brand)}`;
+      const idKey = norm(machineId);
+      if(!idKey) return;
+      if(!out.allowedIdsByMachineBrand[key]) out.allowedIdsByMachineBrand[key] = new Set();
+      out.allowedIdsByMachineBrand[key].add(idKey);
+    };
+
+    rawItems.forEach(raw => {
+      const value = (raw || '').trim();
+      if(!value) return;
+      const parts = value.split('|||');
+      const itemType = (parts[0] || '').trim();
+      const itemId = (parts[1] || '').trim();
+      const itemTypeNorm = norm(itemType);
+      const itemIdNorm = norm(itemId);
+
+      if(itemIdNorm){
+        let idMatches = machineBrandById[itemIdNorm] || [];
+        if(itemTypeNorm){
+          idMatches = idMatches.filter(match => {
+            const brandKey = norm(match.brand);
+            const machineKey = norm(match.machine);
+            return brandKey === itemTypeNorm || machineKey === itemTypeNorm;
+          });
+        }
+        idMatches.forEach(match => addMachineBrandId(match.machine, match.brand, itemId));
+        // For mapping that includes Machine ID, do not widen scope by Machine Type only.
+        return;
+      }
+
+      if(itemTypeNorm){
+        const mappedMachine = machineKeyByNorm[itemTypeNorm];
+        if(mappedMachine){
+          out.allowedMachines.add(norm(mappedMachine));
+          return;
+        }
+        const machineMatches = machineByBrand[itemTypeNorm] || [];
+        machineMatches.forEach(machine => addMachineBrand(machine, itemType));
+
+        const idAsTypeMatches = machineBrandById[itemTypeNorm] || [];
+        idAsTypeMatches.forEach(match => addMachineBrandId(match.machine, match.brand, itemType));
+      }
+    });
+
+    return out;
+  }
+
+  function getCurrentLineScope(){
+    return resolveLineScope(lineSel ? lineSel.value : '');
+  }
+
   function getFilteredMachineTypes(){
     const allTypes = Object.keys(machineTypeMap || {});
+    const lineScope = getCurrentLineScope();
     const area = selectedSupportArea();
-    if(!area){
-      return allTypes.sort((a,b)=>a.localeCompare(b, undefined, { sensitivity:'base', numeric:true }));
+    let out = allTypes.slice();
+    if(area){
+      const allowed = new Set(allowedMachinesFor(area).map(norm));
+      out = out.filter(t => allowed.has(norm(t)));
     }
-    const allowed = new Set(allowedMachinesFor(area).map(norm));
-    return allTypes
-      .filter(t => allowed.has(norm(t)))
-      .sort((a,b)=>a.localeCompare(b, undefined, { sensitivity:'base', numeric:true }));
+    if(lineScope.hasMapping && lineScope.allowedMachines.size){
+      out = out.filter(t => lineScope.allowedMachines.has(norm(t)));
+    }
+    return out.sort((a,b)=>a.localeCompare(b, undefined, { sensitivity:'base', numeric:true }));
   }
 
   function buildMachineTypesAll(){
@@ -450,7 +568,17 @@
   buildMachineTypesAll();
 
   function rebuildEquipmentOptionsForType(type){
-    const brands = (machineTypeMap[type]||[]).filter(n=>!removedMachines.has(n));
+    const lineScope = getCurrentLineScope();
+    let brands = (machineTypeMap[type]||[]).filter(n=>!removedMachines.has(n));
+    if(lineScope.hasMapping){
+      const machineKey = norm(type);
+      const allowedBrands = lineScope.allowedBrandsByMachine[machineKey];
+      if(allowedBrands && allowedBrands.size){
+        brands = brands.filter(brand => allowedBrands.has(norm(brand)));
+      }else if(lineScope.allowedMachines.size && !lineScope.allowedMachines.has(machineKey)){
+        brands = [];
+      }
+    }
     eqSel.innerHTML = '<option value="">-- Select Machine Type --</option>';
     brands.forEach(brand=>{
       const o=document.createElement('option');
@@ -525,6 +653,7 @@
   }
 
   function onEquipmentChange(){
+    const lineScope = getCurrentLineScope();
     const type = typeSel.value || '';
     const raw  = eqSel.value || '';
     const brand = raw.includes('||') ? raw.split('||')[1] : raw;
@@ -535,7 +664,20 @@
       return;
     }
 
-    const machineIds = getMachineIdsForEquipment(type, brand);
+    let machineIds = getMachineIdsForEquipment(type, brand);
+    if(lineScope.hasMapping){
+      const machineKey = norm(type);
+      const brandKey = norm(brand);
+      const allowedBrands = lineScope.allowedBrandsByMachine[machineKey];
+      if(allowedBrands && !allowedBrands.has(brandKey)){
+        machineIds = [];
+      }else{
+        const scopedIds = lineScope.allowedIdsByMachineBrand[`${machineKey}||${brandKey}`];
+        if(scopedIds && scopedIds.size){
+          machineIds = machineIds.filter(idVal => scopedIds.has(norm(idVal)));
+        }
+      }
+    }
     rebuildMachineIdOptions(machineIds);
     machineIdSel.value = '';
     machineIdWrap.style.display='block';
@@ -557,6 +699,7 @@
   }
 
   if(typeSel){ typeSel.addEventListener('change', e=>{ rebuildEquipmentOptionsForType(e.target.value); }); }
+  if(lineSel){ lineSel.addEventListener('change', ()=>{ buildMachineTypesAll(); }); }
   if(eqSel){ eqSel.addEventListener('change', onEquipmentChange); }
   if(machineIdSel){ machineIdSel.addEventListener('change', onMachineIdChange); }
   eqSel.disabled = true;

@@ -552,7 +552,9 @@ def _ensure_postgres_manage_users_table() -> None:
 
 LINE_MACHINE_ITEM_SEPARATOR = "|||"
 LINE_MACHINE_MAP_SETTING_KEY = "line_machine_map_v1"
-DEFAULT_LINE_MACHINE_MAP_FILE = os.path.join(BASE_DIR, "database", "monitoring_line_map.json")
+DEFAULT_LINE_MACHINE_MAP_FILE = os.path.join(
+    os.path.abspath(os.path.join(BASE_DIR, "..")), "database", "monitoring_line_map.json"
+)
 
 
 def _load_line_monitoring_raw_from_file():

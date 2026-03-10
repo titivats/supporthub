@@ -377,7 +377,7 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
                 chart_rows,
                 master.get("line_machine_map", {}),
                 include_full_context_label=True,
-                strict_mode=False,
+                strict_mode=True,
             )
             line_metrics = _build_monitoring_line_chart_metrics(chart_rows, line_start_utc, line_end_utc)
 
@@ -417,4 +417,3 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
     def api_iot_monitor_status(request: Request, db: Session = Depends(get_db)):
         _ = get_current_user(request, db)
         return iot_monitor.snapshot()
-

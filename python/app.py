@@ -1,6 +1,6 @@
 ﻿# server_app.py
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 import json
 import os
 import threading
@@ -132,6 +132,7 @@ DEFAULT_SUPPORT_AREA_MAP = {
 LINE_MACHINE_MAP_SETTING_KEY = "line_machine_map_v1"
 DEFAULT_LINE_MACHINE_MAP_FILE = "database/monitoring_line_map.json"
 LINE_MACHINE_MAP_FILE_ENV = "SUPPORTHUB_LINE_MACHINE_MAP_FILE"
+LINE_MACHINE_ITEM_SEPARATOR = "|||"
 
 MASTER_STATUS_TEXT = {
     "line_added": "Added new Line No. successfully",
@@ -354,6 +355,91 @@ def _normalize_line_machine_map(raw: object) -> Dict[str, List[str]]:
             out[line_no] = sorted(items, key=lambda s: s.lower())
     return out
 
+
+def _split_line_machine_item(raw_item: Optional[str]) -> tuple[str, str]:
+    item = _clean_text(raw_item)
+    if not item:
+        return "", ""
+    if LINE_MACHINE_ITEM_SEPARATOR in item:
+        left, right = item.split(LINE_MACHINE_ITEM_SEPARATOR, 1)
+        return _clean_text(left), _clean_text(right)
+    return item, ""
+
+
+def _build_line_machine_lookup(
+    db: Session,
+) -> tuple[Set[str], Dict[str, str], Dict[str, Dict[str, str]]]:
+    allowed_lines: Set[str] = set()
+    machine_type_lookup: Dict[str, str] = {}
+    machine_id_lookup: Dict[str, Dict[str, str]] = {}
+
+    for (line_no,) in db.query(MasterLine.line_no).all():
+        line_val = _clean_text(line_no).upper()
+        if line_val:
+            allowed_lines.add(line_val)
+
+    for (machine_type,) in db.query(MasterMachineType.machine_type).all():
+        mt_val = _clean_text(machine_type)
+        if not mt_val:
+            continue
+        machine_type_lookup.setdefault(mt_val.lower(), mt_val)
+
+    for machine_type, machine_id in db.query(MasterMachineId.machine_type, MasterMachineId.machine_id).all():
+        mt_val = _clean_text(machine_type)
+        mid_val = _clean_text(machine_id)
+        if not mt_val or not mid_val:
+            continue
+        mt_key = mt_val.lower()
+        canonical_type = machine_type_lookup.get(mt_key, mt_val)
+        machine_type_lookup.setdefault(mt_key, canonical_type)
+        machine_id_lookup.setdefault(mt_key, {})
+        machine_id_lookup[mt_key].setdefault(mid_val.lower(), mid_val)
+
+    return allowed_lines, machine_type_lookup, machine_id_lookup
+
+
+def _sanitize_line_machine_map(
+    line_machine_map: Dict[str, List[str]],
+    allowed_lines: Set[str],
+    machine_type_lookup: Dict[str, str],
+    machine_id_lookup: Dict[str, Dict[str, str]],
+) -> Dict[str, List[str]]:
+    normalized = _normalize_line_machine_map(line_machine_map)
+    out: Dict[str, List[str]] = {}
+
+    for line_no, raw_items in normalized.items():
+        if line_no not in allowed_lines:
+            continue
+
+        kept: List[str] = []
+        seen = set()
+        for raw_item in raw_items:
+            item_type, machine_id = _split_line_machine_item(raw_item)
+            if not item_type:
+                continue
+
+            type_key = item_type.lower()
+            canonical_type = machine_type_lookup.get(type_key)
+            if not canonical_type:
+                continue
+
+            normalized_item = canonical_type
+            if machine_id:
+                canonical_id = (machine_id_lookup.get(type_key) or {}).get(machine_id.lower())
+                if not canonical_id:
+                    continue
+                normalized_item = f"{canonical_type}{LINE_MACHINE_ITEM_SEPARATOR}{canonical_id}"
+
+            item_key = normalized_item.lower()
+            if item_key in seen:
+                continue
+            seen.add(item_key)
+            kept.append(normalized_item)
+
+        if kept:
+            out[line_no] = sorted(kept, key=lambda s: s.lower())
+    return out
+
 def _line_machine_map_path() -> Path:
     custom_path = _clean_text(os.getenv(LINE_MACHINE_MAP_FILE_ENV))
     if custom_path:
@@ -379,21 +465,30 @@ def _get_line_machine_map(db: Session) -> Dict[str, List[str]]:
     # Monitoring mapping is file-based to keep it outside PostgreSQL.
     map_file = _line_machine_map_path()
     file_map = _read_line_machine_map_file(map_file)
-    if map_file.exists():
-        return file_map
+    if not map_file.exists():
+        # One-time fallback: migrate legacy mapping from app_settings if present.
+        row = db.query(AppSetting).filter(AppSetting.key == LINE_MACHINE_MAP_SETTING_KEY).first()
+        if row and _clean_text(row.value):
+            try:
+                raw = json.loads(row.value)
+            except Exception:
+                raw = {}
+            normalized = _normalize_line_machine_map(raw)
+            if normalized:
+                _write_line_machine_map_file(map_file, normalized)
+                file_map = normalized
 
-    # One-time fallback: migrate legacy mapping from app_settings if present.
-    row = db.query(AppSetting).filter(AppSetting.key == LINE_MACHINE_MAP_SETTING_KEY).first()
-    if not row or not _clean_text(row.value):
-        return {}
-    try:
-        raw = json.loads(row.value)
-    except Exception:
-        return {}
-    normalized = _normalize_line_machine_map(raw)
-    if normalized:
-        _write_line_machine_map_file(map_file, normalized)
-    return normalized
+    allowed_lines, machine_type_lookup, machine_id_lookup = _build_line_machine_lookup(db)
+    sanitized = _sanitize_line_machine_map(
+        file_map,
+        allowed_lines,
+        machine_type_lookup,
+        machine_id_lookup,
+    )
+
+    if sanitized != file_map:
+        _write_line_machine_map_file(map_file, sanitized)
+    return sanitized
 
 def _save_line_machine_map(db: Session, line_machine_map: Dict[str, List[str]]) -> None:
     map_file = _line_machine_map_path()

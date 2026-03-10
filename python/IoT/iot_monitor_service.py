@@ -86,9 +86,9 @@ class _Sample:
 
 class IoTMonitorService:
     def __init__(self) -> None:
-        self.host = os.getenv("SUPPORTHUB_MQTT_HOST", "192.168.1.109").strip() or "192.168.1.109"
+        self.host = os.getenv("SUPPORTHUB_MQTT_HOST", "10.206.9.201").strip() or "10.206.9.201"
         self.port = int(os.getenv("SUPPORTHUB_MQTT_PORT", "1883"))
-        self.topic = os.getenv("SUPPORTHUB_MQTT_TOPIC", "power/pzem").strip() or "power/pzem"
+        self.topic = os.getenv("SUPPORTHUB_MQTT_TOPIC", "power/pzem").strip() or "power/pzem1"
         self.client_id = os.getenv("SUPPORTHUB_MQTT_CLIENT_ID", "SUPPORTHUB-IOT-MONITOR").strip() or "SUPPORTHUB-IOT-MONITOR"
         self.sample_limit = int(os.getenv("SUPPORTHUB_IOT_SAMPLE_LIMIT", "180"))
 
@@ -310,9 +310,10 @@ class IoTMonitorService:
     # MQTT callbacks
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):  # noqa: ANN001
         now = datetime.utcnow()
+        rc = getattr(reason_code, "value", reason_code)
         status_row: Dict[str, Any]
         with self._lock:
-            if int(reason_code) == 0:
+            if int(rc) == 0:
                 self.connected = True
                 self.last_error = ""
                 try:
@@ -328,10 +329,11 @@ class IoTMonitorService:
 
     def _on_disconnect(self, client, userdata, reason_code, properties=None):  # noqa: ANN001
         now = datetime.utcnow()
+        rc = getattr(reason_code, "value", reason_code)
         status_row: Dict[str, Any]
         with self._lock:
             self.connected = False
-            if int(reason_code) != 0:
+            if int(rc) != 0:
                 self.last_error = f"MQTT disconnected (reason_code={reason_code})"
             status_row = self._build_status_log_row(now)
         self._insert_status_log_row(status_row)
