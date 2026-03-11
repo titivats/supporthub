@@ -883,6 +883,36 @@ def _ensure_postgres_add_machine_tables() -> None:
             ORDER BY a.created_at DESC, a.id DESC
             """,
         },
+        {
+            "table_name": "problem_match_class_table",
+            "source_table": "problem_classes",
+            "refresh_fn": "refresh_problem_match_class_table",
+            "trigger_name": "trg_refresh_problem_match_class",
+            "select_sql": """
+            SELECT
+                coalesce(pc.class_name, '-') AS "Class",
+                to_char(pc.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
+                ''::text AS "Action"
+            FROM public.problem_classes pc
+            ORDER BY pc.class_name ASC, pc.id ASC
+            """,
+        },
+        {
+            "table_name": "problem_match_table",
+            "source_table": "problem_matches",
+            "refresh_fn": "refresh_problem_match_table",
+            "trigger_name": "trg_refresh_problem_match",
+            "select_sql": """
+            SELECT
+                coalesce(pm.machine, '-') AS "Machine",
+                coalesce(pm.problem, '-') AS "Problem",
+                coalesce(pm.class_name, '-') AS "Class",
+                to_char(pm.created_at + interval '7 hour', 'DD-MM-YYYY HH24:MI:SS') AS "Created",
+                ''::text AS "Action"
+            FROM public.problem_matches pm
+            ORDER BY pm.machine ASC, pm.problem ASC, pm.class_name ASC, pm.id ASC
+            """,
+        },
     )
 
     with engine.begin() as con:
@@ -915,6 +945,8 @@ def _drop_postgres_display_table_artifacts() -> None:
         "add_machine_problem_table",
         "add_machine_update_history_table",
         "add_machine_line_to_monitoring_page_table",
+        "problem_match_class_table",
+        "problem_match_table",
     )
     trigger_specs = (
         ("trg_refresh_history_log_table_tickets", "tickets"),
@@ -928,6 +960,8 @@ def _drop_postgres_display_table_artifacts() -> None:
         ("trg_refresh_am_machine_id", "master_machine_ids"),
         ("trg_refresh_am_problem", "master_problems"),
         ("trg_refresh_am_update_history", "master_audit_logs"),
+        ("trg_refresh_problem_match_class", "problem_classes"),
+        ("trg_refresh_problem_match", "problem_matches"),
     )
     refresh_functions = (
         "refresh_history_log_table",
@@ -940,6 +974,8 @@ def _drop_postgres_display_table_artifacts() -> None:
         "refresh_am_machine_id_table",
         "refresh_am_problem_table",
         "refresh_am_update_history_table",
+        "refresh_problem_match_class_table",
+        "refresh_problem_match_table",
     )
 
     with engine.begin() as con:

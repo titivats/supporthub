@@ -59,6 +59,7 @@ def register_web_routes(app, templates, deps):
     USERNAME_NUMERIC_PATTERN = re.compile(r"^\d{6}$")
     ALLOWED_ROLES = ("Operator", "Engineer", "Technician", "Admin")
     PUBLIC_SIGNUP_ROLES = ("Operator", "Engineer", "Technician")
+    MONITORING_DOWNTIME_CLASS = "Machine Downtime"
 
     def _is_valid_manage_username(username: str) -> bool:
         return bool(USERNAME_NUMERIC_PATTERN.fullmatch((username or "").strip()))
@@ -402,6 +403,41 @@ def register_web_routes(app, templates, deps):
             out.append(row)
         return out
 
+    def _apply_problem_match_class_filter(
+        rows: List[Ticket],
+        db: Session,
+        class_name: str,
+    ) -> List[Ticket]:
+        class_key = _clean_text(class_name).lower()
+        if not class_key:
+            return rows
+
+        allowed_pairs = {
+            (_clean_text(row.machine).lower(), _clean_text(row.problem).lower())
+            for row in db.query(ProblemMatch).all()
+            if _clean_text(row.class_name).lower() == class_key
+            and _clean_text(row.machine)
+            and _clean_text(row.problem)
+        }
+        if not allowed_pairs:
+            return []
+
+        out: List[Ticket] = []
+        for row in rows:
+            machine_val = _clean_text(getattr(row, "history_machine", ""))
+            if not machine_val:
+                equipment_val = _clean_text(getattr(row, "equipment", ""))
+                if "||" in equipment_val:
+                    machine_val = _clean_text(equipment_val.split("||", 1)[0])
+                else:
+                    machine_val = equipment_val
+            problem_val = _clean_text(getattr(row, "problem", ""))
+            if not machine_val or not problem_val:
+                continue
+            if (machine_val.lower(), problem_val.lower()) in allowed_pairs:
+                out.append(row)
+        return out
+
     def _redirect_admin_machines(status_key: str) -> RedirectResponse:
         return RedirectResponse(f"/admin/machines?status={status_key}", status_code=303)
 
@@ -526,6 +562,8 @@ def register_web_routes(app, templates, deps):
         "_build_monitoring_line_chart_metrics": _build_monitoring_line_chart_metrics,
         "_normalize_history_filters": _normalize_history_filters,
         "_apply_history_machine_filters": _apply_history_machine_filters,
+        "_apply_problem_match_class_filter": _apply_problem_match_class_filter,
+        "MONITORING_DOWNTIME_CLASS": MONITORING_DOWNTIME_CLASS,
         "_redirect_admin_machines": _redirect_admin_machines,
         "_require_admin_user": _require_admin_user,
         "_commit_master_change": _commit_master_change,

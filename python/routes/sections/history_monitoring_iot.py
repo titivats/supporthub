@@ -20,6 +20,8 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
     build_monitoring_metrics = ctx["build_monitoring_metrics"]
     build_monitoring_line_metrics = ctx["build_monitoring_line_metrics"]
     _apply_history_machine_filters = ctx["_apply_history_machine_filters"]
+    _apply_problem_match_class_filter = ctx["_apply_problem_match_class_filter"]
+    MONITORING_DOWNTIME_CLASS = ctx["MONITORING_DOWNTIME_CLASS"]
     _normalize_history_filters = ctx["_normalize_history_filters"]
     _apply_line_support_area_filter = ctx["_apply_line_support_area_filter"]
     _apply_monitoring_line_machine_map = ctx["_apply_monitoring_line_machine_map"]
@@ -138,7 +140,7 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
         total_hold = sum((t.hold_secs or 0) for t in rows)
         summary = {"doing": _fmt_hms(total_doing), "hold": _fmt_hms(total_hold)}
 
-        return templates.TemplateResponse("history.html", {
+        return templates.TemplateResponse("history_log.html", {
             "request": request,
             "user": user,
             "rows": rows,
@@ -356,6 +358,7 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
         if applied:
             rows = _query_done_or_cancel(db, line_op, None, start_utc, end_utc)
             rows = _apply_history_machine_filters(rows, machine_type_val, machine_brand_val, master["machine_type_map"])
+            rows = _apply_problem_match_class_filter(rows, db, MONITORING_DOWNTIME_CLASS)
             filtered_count = len(rows)
             metrics = build_monitoring_metrics(rows, start_utc, end_utc)
 
@@ -368,6 +371,7 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
         if line_applied:
             chart_rows = _query_done_or_cancel(db, None, None, line_start_utc, line_end_utc)
             chart_rows = _apply_history_machine_filters(chart_rows, "", "", master["machine_type_map"])
+            chart_rows = _apply_problem_match_class_filter(chart_rows, db, MONITORING_DOWNTIME_CLASS)
             chart_rows = _apply_line_support_area_filter(
                 chart_rows,
                 line_support_area_val,
@@ -381,7 +385,7 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
             )
             line_metrics = _build_monitoring_line_chart_metrics(chart_rows, line_start_utc, line_end_utc)
 
-        return templates.TemplateResponse("OEE/monitoring.html", {
+        return templates.TemplateResponse("monitoring.html", {
             "request": request,
             "user": user,
             "line_ops": master["line_ops"],
@@ -400,6 +404,7 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
             "line_end_date": line_end_date or "",
             "line_applied": line_applied,
             "line_metrics": line_metrics,
+            "downtime_class_name": MONITORING_DOWNTIME_CLASS,
         })
 
     @app.get("/iot-monitor", response_class=HTMLResponse)
@@ -408,7 +413,7 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
             user = get_current_user(request, db)
         except HTTPException:
             return RedirectResponse("/login", status_code=302)
-        return templates.TemplateResponse("IoT/iot_monitor.html", {
+        return templates.TemplateResponse("iot_monitor.html", {
             "request": request,
             "user": user,
         })
