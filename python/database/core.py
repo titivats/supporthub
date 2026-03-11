@@ -24,6 +24,10 @@ if not (
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
+ENABLE_POSTGRES_DISPLAY_TABLES = (
+    (os.getenv("SUPPORTHUB_ENABLE_POSTGRES_DISPLAY_TABLES") or "").strip().lower()
+    in {"1", "true", "yes", "on"}
+)
 
 
 class User(Base):
@@ -654,7 +658,7 @@ def _refresh_postgres_line_to_monitoring_page_table(con) -> None:
 
 
 def refresh_postgres_line_to_monitoring_page_table() -> None:
-    if engine.dialect.name != "postgresql":
+    if engine.dialect.name != "postgresql" or not ENABLE_POSTGRES_DISPLAY_TABLES:
         return
     with engine.begin() as con:
         _refresh_postgres_line_to_monitoring_page_table(con)
@@ -834,6 +838,60 @@ def _ensure_postgres_add_machine_tables() -> None:
         _refresh_postgres_line_to_monitoring_page_table(con)
 
 
+def _drop_postgres_display_table_artifacts() -> None:
+    if engine.dialect.name != "postgresql":
+        return
+
+    display_tables = (
+        "history_log_table",
+        "manage_users_table",
+        "add_machine_support_area_table",
+        "add_machine_support_area_to_machine_table",
+        "add_machine_line_no_table",
+        "add_machine_machine_table",
+        "add_machine_machine_type_table",
+        "add_machine_machine_id_table",
+        "add_machine_problem_table",
+        "add_machine_update_history_table",
+        "add_machine_line_to_monitoring_page_table",
+    )
+    trigger_specs = (
+        ("trg_refresh_history_log_table_tickets", "tickets"),
+        ("trg_refresh_history_log_table_takeover", "ticket_takeover_logs"),
+        ("trg_refresh_manage_users_table_users", "users"),
+        ("trg_refresh_am_support_area", "master_support_areas"),
+        ("trg_refresh_am_support_area_to_machine", "master_support_area_maps"),
+        ("trg_refresh_am_line_no", "master_lines"),
+        ("trg_refresh_am_machine", "master_machines"),
+        ("trg_refresh_am_machine_type", "master_machine_types"),
+        ("trg_refresh_am_machine_id", "master_machine_ids"),
+        ("trg_refresh_am_problem", "master_problems"),
+        ("trg_refresh_am_update_history", "master_audit_logs"),
+    )
+    refresh_functions = (
+        "refresh_history_log_table",
+        "refresh_manage_users_table",
+        "refresh_am_support_area_table",
+        "refresh_am_support_area_to_machine_table",
+        "refresh_am_line_no_table",
+        "refresh_am_machine_table",
+        "refresh_am_machine_type_table",
+        "refresh_am_machine_id_table",
+        "refresh_am_problem_table",
+        "refresh_am_update_history_table",
+    )
+
+    with engine.begin() as con:
+        for trigger_name, source_table in trigger_specs:
+            con.exec_driver_sql(
+                f"DROP TRIGGER IF EXISTS {trigger_name} ON public.{source_table}"
+            )
+        for fn_name in refresh_functions:
+            con.exec_driver_sql(f"DROP FUNCTION IF EXISTS public.{fn_name}()")
+        for table_name in display_tables:
+            con.exec_driver_sql(f"DROP TABLE IF EXISTS public.{table_name}")
+
+
 def _ensure_admin_user() -> None:
     db = None
     try:
@@ -868,7 +926,10 @@ def init_db() -> None:
     _ensure_columns_and_indexes()
     _ensure_postgres_iot_tables()
     _ensure_postgres_history_view()
-    _ensure_postgres_history_table()
-    _ensure_postgres_manage_users_table()
-    _ensure_postgres_add_machine_tables()
+    if ENABLE_POSTGRES_DISPLAY_TABLES:
+        _ensure_postgres_history_table()
+        _ensure_postgres_manage_users_table()
+        _ensure_postgres_add_machine_tables()
+    else:
+        _drop_postgres_display_table_artifacts()
     _ensure_admin_user()

@@ -478,7 +478,7 @@
     <div class="chart-head">
       <div>
         <h2 class="section-title">Dashboard by Support Area</h2>
-        <div class="chart-meta" id="lineChartMeta">Y-axis = %Downtime, Y2-axis = Hours, X-axis = Support Area | Target &lt; 1%</div>
+        <div class="chart-meta" id="lineChartMeta">Y-axis = %Downtime, Y2-axis = Hours, X-axis = Line No. | Machine | Machine ID | Target &lt; 1%</div>
       </div>
       <div class="metric-switch" id="metricSwitch">
         <button class="btn metric-btn active" type="button" data-metric="downtime_percent">%Downtime</button>
@@ -615,7 +615,7 @@
   const metricConfig = {
     downtime_percent: {
       key: "downtime_percent",
-      axis: "Y-axis = %Downtime, Y2-axis = Hours, X-axis = Support Area",
+      axis: "Y-axis = %Downtime, Y2-axis = Hours, X-axis = Line No. | Machine | Machine ID",
       yAxisLabel: "Downtime (%)",
       format: (v) => `${v.toFixed(2)}%`,
       tickFormat: (v) => `${v.toFixed(v < 10 ? 1 : 0)}%`,
@@ -626,7 +626,7 @@
     },
     oee_percent: {
       key: "oee_percent",
-      axis: "Y-axis = OEE (%), Y2-axis = Hours, X-axis = Support Area",
+      axis: "Y-axis = OEE (%), Y2-axis = Hours, X-axis = Line No. | Machine | Machine ID",
       yAxisLabel: "OEE (%)",
       format: (v) => `${v.toFixed(2)}%`,
       tickFormat: (v) => `${v.toFixed(0)}%`,
@@ -637,7 +637,7 @@
     },
     mtbf_hours: {
       key: "mtbf_hours",
-      axis: "Y-axis = MTBF (hours), Y2-axis = Hours, X-axis = Support Area",
+      axis: "Y-axis = MTBF (hours), Y2-axis = Hours, X-axis = Line No. | Machine | Machine ID",
       yAxisLabel: "MTBF (hours)",
       format: (v) => `${v.toFixed(2)} h`,
       tickFormat: (v) => `${v.toFixed(0)} h`,
@@ -648,7 +648,7 @@
     },
     mttr_hours: {
       key: "mttr_hours",
-      axis: "Y-axis = MTTR (hours), Y2-axis = Hours, X-axis = Support Area",
+      axis: "Y-axis = MTTR (hours), Y2-axis = Hours, X-axis = Line No. | Machine | Machine ID",
       yAxisLabel: "MTTR (hours)",
       format: (v) => `${v.toFixed(2)} h`,
       tickFormat: (v) => `${v.toFixed(v < 10 ? 1 : 0)} h`,
@@ -680,12 +680,17 @@
   let machineColorOverrides = {};
   const machineColorCache = new Map();
   let currentMetricKey = "downtime_percent";
-  const lineSupportAreaSelected = {{ (line_support_area or "") | tojson }};
   const normalizeMachineKey = (name) => String(name || "").trim().toLowerCase();
+  function toMachineName(rawLabel){
+    const parts = String(rawLabel || "").split("|").map((p) => p.trim());
+    if(parts.length >= 2 && parts[1] && parts[1] !== "-") return parts[1];
+    if(parts.length >= 1 && parts[0] && parts[0] !== "-") return parts[0];
+    return String(rawLabel || "").trim();
+  }
   function buildDefaultMachineColorOverrides(){
     const out = {};
     Object.entries(defaultMachineColorOverrides || {}).forEach(([k, v]) => {
-      const key = normalizeMachineKey(k);
+      const key = normalizeMachineKey(toMachineName(k));
       if(key && typeof v === "string" && v.trim()) out[key] = v.trim();
     });
     return out;
@@ -701,7 +706,7 @@
     }
     const out = buildDefaultMachineColorOverrides();
     Object.entries(loaded || {}).forEach(([k, v]) => {
-      const key = normalizeMachineKey(k);
+      const key = normalizeMachineKey(toMachineName(k));
       if(key && typeof v === "string" && v.trim()) out[key] = v.trim();
     });
     return out;
@@ -742,14 +747,18 @@
     const linePrefix = parent ? `${parent} - ` : "";
     return linePrefix && source.startsWith(linePrefix) ? source.slice(linePrefix.length) : source;
   }
-  function toMachineTypeAndIdLabel(rawLabel){
+  function toAxisItemLabel(lineNo, rawLabel){
+    const lineText = String(lineNo || "-").trim() || "-";
     const parts = String(rawLabel || "").split("|").map((p) => p.trim());
     if (parts.length >= 3){
-      const machineType = parts[1] || "-";
+      const machine = (parts[1] && parts[1] !== "-") ? parts[1] : (parts[0] || "-");
       const machineId = parts[2] || "-";
-      return `${machineType} | ${machineId}`;
+      return `${lineText} | ${machine} | ${machineId}`;
     }
-    return String(rawLabel || "").trim();
+    if (parts.length === 2){
+      return `${lineText} | ${parts[0] || "-"} | ${parts[1] || "-"}`;
+    }
+    return `${lineText} | ${String(rawLabel || "").trim() || "-"} | -`;
   }
   function getMachineColorItems(){
     const names = new Set();
@@ -757,7 +766,8 @@
       if(!(item?.is_item_breakdown === true)) return;
       const parentLine = String(item?.line_parent || item?.line_op || "-");
       const name = toDisplayItemLabel(String(item?.line_op || ""), parentLine);
-      const trimmed = String(name || "").trim();
+      const machineName = toMachineName(name);
+      const trimmed = String(machineName || "").trim();
       if(trimmed) names.add(trimmed);
     });
     return Array.from(names).sort((a, b) => a.localeCompare(b, undefined, { sensitivity:"base", numeric:true }));
@@ -922,13 +932,7 @@
       const bars = group.bars || [];
       const clusterWidth = bars.length * barWidth + Math.max(0, bars.length - 1) * barGap;
       const clusterStart = pad.left + slotWidth * groupIdx + (slotWidth - clusterWidth) / 2;
-      const groupCenterX = clusterStart + clusterWidth / 2;
       const lineDisplay = formatLineOperateName(group.line);
-      const supportAreaDisplay = String(lineSupportAreaSelected || "").trim();
-      const groupLabelSource = supportAreaDisplay
-        ? (groups.length === 1 ? supportAreaDisplay : `${supportAreaDisplay} (${lineDisplay})`)
-        : lineDisplay;
-      const groupLabel = groupLabelSource.length > 22 ? `${groupLabelSource.slice(0, 22)}...` : groupLabelSource;
       const groupBars = bars.map((bar, barIdx) => {
         const x = clusterStart + barIdx * (barWidth + barGap);
         const y = yFromValue(bar.value);
@@ -938,9 +942,10 @@
         const valueText = cfg.format(bar.value);
         const rawName = String(bar.name || "");
         const itemLabelRaw = toDisplayItemLabel(rawName, group.line);
-        const itemLabel = toMachineTypeAndIdLabel(itemLabelRaw);
+        const machineName = toMachineName(itemLabelRaw);
+        const itemLabel = toAxisItemLabel(lineDisplay, itemLabelRaw);
         const showItemLabel = showMachineInfoLabels;
-        const fillColor = bar.isBreakdown ? pickMachineColor(itemLabelRaw) : chartPalette.lineSummary;
+        const fillColor = bar.isBreakdown ? pickMachineColor(machineName) : chartPalette.lineSummary;
         return `
           <g>
             <title>${escapeSvg(lineDisplay)} / ${escapeSvg(itemLabelRaw)}: ${escapeSvg(valueText)}</title>
@@ -950,11 +955,9 @@
           </g>
         `;
       }).join("");
-      const groupLabelY = showMachineInfoLabels ? (plotBottom + 142) : (hasBreakdown ? (plotBottom + 128) : (plotBottom + 78));
       return `
         <g>
           ${groupBars}
-          <text x="${groupCenterX}" y="${groupLabelY}" text-anchor="middle" font-size="12" font-weight="700" fill="${chartPalette.groupText}">${escapeSvg(groupLabel)}</text>
         </g>
       `;
     }).join("");
@@ -969,7 +972,7 @@
         ${barParts}
         <line x1="${pad.left}" y1="${targetY}" x2="${pad.left + plotWidth}" y2="${targetY}" stroke="${chartPalette.targetLine}" stroke-width="2.6" stroke-dasharray="7 5" stroke-linecap="round"></line>
         <text x="${pad.left + plotWidth - 4}" y="${Math.max(targetY - 8, pad.top + 12)}" text-anchor="end" font-size="12" font-weight="700" fill="${chartPalette.targetText}">${escapeSvg(cfg.targetLabel)}</text>
-        <text x="${pad.left + plotWidth / 2}" y="${height - 16}" text-anchor="middle" font-size="13" font-weight="700" fill="${chartPalette.itemText}">Support Area</text>
+        <text x="${pad.left + plotWidth / 2}" y="${height - 16}" text-anchor="middle" font-size="13" font-weight="700" fill="${chartPalette.itemText}">Line No. | Machine | Machine ID</text>
         <text x="22" y="${pad.top + plotHeight / 2}" text-anchor="middle" transform="rotate(-90 22 ${pad.top + plotHeight / 2})" font-size="13" font-weight="700" fill="${chartPalette.itemText}">${escapeSvg(cfg.yAxisLabel)}</text>
         <text x="${width - 22}" y="${pad.top + plotHeight / 2}" text-anchor="middle" transform="rotate(90 ${width - 22} ${pad.top + plotHeight / 2})" font-size="13" font-weight="700" fill="${chartPalette.itemText}">${escapeSvg(cfg.rightAxisLabel || "Hours")}</text>
       </svg>
@@ -1004,4 +1007,3 @@
 </script>
 </body>
 </html>
-

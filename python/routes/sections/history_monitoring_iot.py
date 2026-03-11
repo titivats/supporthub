@@ -417,3 +417,18 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
     def api_iot_monitor_status(request: Request, db: Session = Depends(get_db)):
         _ = get_current_user(request, db)
         return iot_monitor.snapshot()
+
+    @app.post("/api/iot-monitor/reconnect")
+    async def api_iot_monitor_reconnect(request: Request, db: Session = Depends(get_db)):
+        _ = get_current_user(request, db)
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        result = iot_monitor.reconnect(
+            host=body.get("host"),
+            port=int(body["port"]) if body.get("port") else None,
+            topic=body.get("topic"),
+            client_id=body.get("client_id"),
+        )
+        return {"ok": True, **result}

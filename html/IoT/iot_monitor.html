@@ -5,9 +5,9 @@
   <title>IoT Monitor - SupportHub</title>
   <style>
     :root{
-      --bg:#f6f7fb;
+      --bg:#f0f2f8;
       --card:#ffffff;
-      --line:#e7e7ee;
+      --line:#e2e4ee;
       --muted:#6b7280;
       --ok-bg:#dcfce7;
       --ok-fg:#166534;
@@ -20,7 +20,7 @@
     body{
       margin:0;
       background:var(--bg);
-      color:#111827;
+      color:#1e293b;
       font-family:system-ui, Segoe UI, Arial;
       line-height:1.35;
     }
@@ -33,7 +33,7 @@
       margin-bottom:14px;
       flex-wrap:wrap;
     }
-    h1{margin:0 0 4px;font-size:28px;line-height:1.15}
+    h1{margin:0 0 4px;font-size:28px;line-height:1.15;color:#0f172a}
     .lead{margin:0;color:var(--muted);font-size:13px}
     .actions{display:flex;gap:8px;flex-wrap:wrap}
     .btn, a.btn{
@@ -46,17 +46,20 @@
       border:1px solid var(--line);
       border-radius:10px;
       background:#fff;
-      color:#111827;
+      color:#1e293b;
       text-decoration:none;
       cursor:pointer;
       font-size:14px;
+      transition:background .15s;
     }
+    .btn:hover{background:#f8fafc}
     .card{
       background:var(--card);
       border:1px solid var(--line);
-      border-radius:14px;
-      padding:14px;
-      margin-bottom:12px;
+      border-radius:16px;
+      padding:16px;
+      margin-bottom:14px;
+      box-shadow:0 1px 3px rgba(0,0,0,.04);
     }
     .status-top{
       display:flex;
@@ -77,25 +80,13 @@
       align-items:center;
       border-radius:999px;
       border:1px solid var(--line);
-      padding:5px 10px;
+      padding:5px 12px;
       font-size:12px;
       font-weight:600;
     }
-    .badge.ok{
-      background:var(--ok-bg);
-      border-color:#86efac;
-      color:var(--ok-fg);
-    }
-    .badge.warn{
-      background:var(--warn-bg);
-      border-color:#fcd34d;
-      color:var(--warn-fg);
-    }
-    .badge.err{
-      background:var(--err-bg);
-      border-color:#fca5a5;
-      color:var(--err-fg);
-    }
+    .badge.ok{background:var(--ok-bg);border-color:#86efac;color:var(--ok-fg)}
+    .badge.warn{background:var(--warn-bg);border-color:#fcd34d;color:var(--warn-fg)}
+    .badge.err{background:var(--err-bg);border-color:#fca5a5;color:var(--err-fg)}
     .muted{color:var(--muted)}
     .status-meta{
       display:grid;
@@ -105,19 +96,11 @@
     .meta-item{
       border:1px solid var(--line);
       border-radius:10px;
-      padding:10px;
-      background:#fff;
+      padding:10px 12px;
+      background:#fafbfd;
     }
-    .meta-item .k{
-      color:var(--muted);
-      font-size:12px;
-      margin-bottom:4px;
-    }
-    .meta-item .v{
-      font-weight:600;
-      font-size:14px;
-      overflow-wrap:anywhere;
-    }
+    .meta-item .k{color:var(--muted);font-size:11px;margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px}
+    .meta-item .v{font-weight:600;font-size:13px;overflow-wrap:anywhere;color:#334155}
     .error-box{
       margin-top:10px;
       border:1px solid #fca5a5;
@@ -133,105 +116,218 @@
       justify-content:space-between;
       align-items:center;
       gap:10px;
+      margin-bottom:12px;
+    }
+    .card-head h2{margin:0;font-size:22px;line-height:1.15;color:#0f172a}
+
+    /* Device info bar */
+    .device-bar{
+      display:flex;
+      align-items:center;
+      gap:18px;
+      flex-wrap:wrap;
+      margin-bottom:14px;
+      padding:10px 14px;
+      background:linear-gradient(135deg, #ede9fe 0%, #e0e7ff 100%);
+      border:1px solid #c7d2fe;
+      border-radius:12px;
+      font-size:13px;
+    }
+    .device-bar strong{font-size:14px;color:#4338ca}
+    .device-bar .di{color:#64748b}
+    .device-bar .di strong{color:#334155;font-size:13px}
+
+    /* Sensor section */
+    .sensor-section{
+      margin-bottom:16px;
+      border-radius:14px;
+      padding:14px;
+      border:1px solid transparent;
+    }
+    .sensor-section:last-child{margin-bottom:0}
+    .sensor-section.s0{background:linear-gradient(135deg, #eff6ff 0%, #f0f9ff 100%);border-color:#bfdbfe}
+    .sensor-section.s1{background:linear-gradient(135deg, #f5f3ff 0%, #faf5ff 100%);border-color:#d8b4fe}
+    .sensor-section.s2{background:linear-gradient(135deg, #ecfdf5 0%, #f0fdfa 100%);border-color:#a7f3d0}
+    .sensor-section.s3{background:linear-gradient(135deg, #fff7ed 0%, #fffbeb 100%);border-color:#fed7aa}
+    .sensor-section.s4{background:linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);border-color:#fecaca}
+    .sensor-section.s5{background:linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);border-color:#fde68a}
+    .sensor-header{
+      display:flex;
+      align-items:center;
+      gap:8px;
       margin-bottom:10px;
     }
-    .card-head h2{
-      margin:0;
-      font-size:24px;
-      line-height:1.15;
-    }
-    .summary-grid{
-      display:grid;
-      grid-template-columns:repeat(5, minmax(0, 1fr));
-      gap:8px;
-    }
-    .summary-item{
-      border:1px solid var(--line);
-      border-radius:10px;
-      background:#fff;
-      padding:10px;
-    }
-    .summary-item .k{
-      color:var(--muted);
-      font-size:12px;
-      margin-bottom:6px;
-      text-transform:uppercase;
+    .sensor-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 3px rgba(255,255,255,.7)}
+    .sensor-header h3{margin:0;font-size:15px;font-weight:700;color:#1e293b}
+    .sensor-header .sensor-status{
+      font-size:11px;
+      padding:2px 10px;
+      border-radius:999px;
+      font-weight:700;
       letter-spacing:.3px;
     }
-    .summary-item .v{
-      font-size:24px;
-      font-weight:700;
-      line-height:1;
+    .sensor-status.ok{background:#bbf7d0;color:#166534;border:1px solid #86efac}
+    .sensor-status.off{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+    .sensor-grid{
+      display:grid;
+      grid-template-columns:repeat(6, minmax(0, 1fr));
+      gap:8px;
     }
-    .summary-item .u{
-      margin-left:6px;
-      font-size:12px;
-      color:var(--muted);
+    .sensor-item{
+      border-radius:12px;
+      background:rgba(255,255,255,.85);
+      backdrop-filter:blur(4px);
+      padding:10px 12px;
+      border:1px solid rgba(255,255,255,.6);
+      box-shadow:0 1px 2px rgba(0,0,0,.04);
+    }
+    .sensor-item .k{
+      color:#64748b;
+      font-size:10px;
+      margin-bottom:5px;
+      text-transform:uppercase;
+      letter-spacing:.5px;
       font-weight:600;
     }
+    .sensor-item .v{
+      font-size:22px;
+      font-weight:700;
+      line-height:1;
+      color:#0f172a;
+    }
+    .sensor-item .u{
+      margin-left:3px;
+      font-size:11px;
+      color:#94a3b8;
+      font-weight:600;
+    }
+
+    /* Charts */
     .charts-grid{
       display:grid;
-      grid-template-columns:repeat(2, minmax(0, 1fr));
+      grid-template-columns:repeat(3, minmax(0, 1fr));
       gap:10px;
     }
     .chart-item{
       border:1px solid var(--line);
-      border-radius:10px;
-      padding:10px;
-      background:#fff;
+      border-radius:12px;
+      padding:10px 12px;
+      background:#fafbfd;
     }
     .chart-title{
       display:flex;
       justify-content:space-between;
       align-items:baseline;
       gap:8px;
-      margin-bottom:8px;
+      margin-bottom:6px;
     }
-    .chart-title strong{
-      font-size:14px;
-    }
-    .chart-range{
-      color:var(--muted);
-      font-size:12px;
-    }
+    .chart-title strong{font-size:13px;color:#334155}
+    .chart-range{color:#94a3b8;font-size:10px}
     .chart-svg{
       width:100%;
-      height:140px;
+      height:100px;
       display:block;
-      border:1px solid #eef2ff;
+      border:1px solid #e2e8f0;
       border-radius:8px;
-      background:linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      background:linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
     }
+    .chart-legend{
+      display:flex;
+      gap:14px;
+      margin-bottom:10px;
+      flex-wrap:wrap;
+    }
+    .chart-legend-item{
+      display:flex;
+      align-items:center;
+      gap:5px;
+      font-size:12px;
+      color:#475569;
+      font-weight:500;
+    }
+    .chart-legend-dot{width:10px;height:10px;border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.8)}
+
+    /* Config panel */
+    .config-toggle{
+      background:none;border:1px solid var(--line);border-radius:8px;
+      padding:4px 12px;font-size:12px;cursor:pointer;color:#475569;
+      transition:background .15s;
+    }
+    .config-toggle:hover{background:#f1f5f9}
+    .config-panel{
+      display:none;
+      margin-top:10px;
+      border:1px solid #c7d2fe;
+      border-radius:12px;
+      background:linear-gradient(135deg, #f5f3ff 0%, #eff6ff 100%);
+      padding:14px;
+    }
+    .config-panel.open{display:block}
+    .config-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr 2fr 1fr;
+      gap:10px;
+      align-items:end;
+    }
+    .config-field label{
+      display:block;font-size:11px;color:#64748b;
+      margin-bottom:4px;text-transform:uppercase;
+      letter-spacing:.3px;font-weight:600;
+    }
+    .config-field input{
+      width:100%;padding:8px 10px;border:1px solid #d1d5db;
+      border-radius:8px;font-size:13px;background:#fff;
+      color:#1e293b;outline:none;transition:border .15s;
+    }
+    .config-field input:focus{border-color:#818cf8;box-shadow:0 0 0 3px rgba(129,140,248,.15)}
+    .btn-reconnect{
+      padding:8px 16px;border:none;border-radius:8px;
+      background:linear-gradient(135deg, #6366f1, #4f46e5);
+      color:#fff;font-size:13px;font-weight:600;cursor:pointer;
+      transition:opacity .15s;min-height:36px;
+    }
+    .btn-reconnect:hover{opacity:.9}
+    .btn-reconnect:disabled{opacity:.5;cursor:not-allowed}
+    .config-status{
+      margin-top:8px;font-size:12px;padding:6px 10px;
+      border-radius:8px;display:none;
+    }
+    .config-status.ok{display:block;background:#dcfce7;color:#166534;border:1px solid #86efac}
+    .config-status.err{display:block;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+
     .raw{
       margin:0;
-      border:1px solid var(--line);
-      border-radius:10px;
-      background:#0f172a;
+      border:1px solid #334155;
+      border-radius:12px;
+      background:#1e293b;
       color:#e2e8f0;
-      padding:12px;
+      padding:14px;
       min-height:70px;
       white-space:pre-wrap;
       word-break:break-word;
       font-size:12px;
-      line-height:1.45;
+      line-height:1.5;
+      font-family:Consolas, Monaco, monospace;
     }
     .empty{
       border:1px dashed #cbd5e1;
-      border-radius:10px;
-      padding:12px;
-      color:#475569;
+      border-radius:12px;
+      padding:14px;
+      color:#64748b;
       font-size:13px;
-      background:#fff;
+      background:#fafbfd;
+      text-align:center;
     }
     @media (max-width:1080px){
       .status-meta{grid-template-columns:repeat(2, minmax(0, 1fr))}
-      .summary-grid{grid-template-columns:repeat(2, minmax(0, 1fr))}
-      .charts-grid{grid-template-columns:1fr}
+      .sensor-grid{grid-template-columns:repeat(3, minmax(0, 1fr))}
+      .charts-grid{grid-template-columns:repeat(2, minmax(0, 1fr))}
     }
     @media (max-width:720px){
       h1{font-size:24px}
-      .card-head h2{font-size:22px}
-      .summary-grid{grid-template-columns:1fr}
+      .card-head h2{font-size:20px}
+      .sensor-grid{grid-template-columns:repeat(2, minmax(0, 1fr))}
+      .charts-grid{grid-template-columns:1fr}
     }
   </style>
 </head>
@@ -270,18 +366,42 @@
         <div class="v" id="clientText">-</div>
       </div>
       <div class="meta-item">
-        <div class="k">Messages / Parse Error</div>
+        <div class="k">Messages / Errors</div>
         <div class="v" id="countText">0 / 0</div>
       </div>
     </div>
     <div id="errBox" class="error-box"></div>
+    <div style="margin-top:10px;text-align:right">
+      <button class="config-toggle" onclick="toggleConfig()">Settings</button>
+    </div>
+    <div id="configPanel" class="config-panel">
+      <div class="config-grid">
+        <div class="config-field">
+          <label>Broker Host</label>
+          <input id="cfgHost" type="text" placeholder="10.206.9.201">
+        </div>
+        <div class="config-field">
+          <label>Port</label>
+          <input id="cfgPort" type="number" placeholder="1883">
+        </div>
+        <div class="config-field">
+          <label>Topic</label>
+          <input id="cfgTopic" type="text" placeholder="power/pzem">
+        </div>
+        <div>
+          <button class="btn-reconnect" id="btnReconnect" onclick="doReconnect()">Reconnect</button>
+        </div>
+      </div>
+      <div id="configStatus" class="config-status"></div>
+    </div>
   </section>
 
   <section class="card">
     <div class="card-head">
-      <h2>Latest Values</h2>
+      <h2>Sensors</h2>
     </div>
-    <div id="summaryGrid" class="summary-grid"></div>
+    <div id="deviceBar" class="device-bar" style="display:none"></div>
+    <div id="sensorsContainer"></div>
     <div id="summaryEmpty" class="empty">Waiting for numeric MQTT payload from the configured topic.</div>
   </section>
 
@@ -290,6 +410,7 @@
       <h2>Trend Charts</h2>
       <div class="muted" id="sampleText">Samples: 0</div>
     </div>
+    <div id="chartLegend" class="chart-legend" style="display:none"></div>
     <div id="chartsGrid" class="charts-grid"></div>
     <div id="chartsEmpty" class="empty">No chart data yet.</div>
   </section>
@@ -301,51 +422,150 @@
 </div>
 
 <script>
-  const labels = {
-    voltage: "Voltage",
-    current: "Current",
-    power: "Power",
-    energy: "Energy",
-    frequency: "Pzem3 Freq",
-    pf: "Power Factor",
-    value: "Value"
+  const METRIC_META = {
+    voltage:   { label: "Voltage",      unit: "V",  color: "#ef4444" },
+    current:   { label: "Current",      unit: "A",  color: "#3b82f6" },
+    power:     { label: "Power",        unit: "W",  color: "#f59e0b" },
+    energy:    { label: "Energy",       unit: "kWh",color: "#10b981" },
+    frequency: { label: "Frequency",    unit: "Hz", color: "#8b5cf6" },
+    pf:        { label: "Power Factor", unit: "",   color: "#6366f1" },
+    freq:      { label: "Frequency",    unit: "Hz", color: "#8b5cf6" }
   };
+  const SENSOR_COLORS = ["#3b82f6","#8b5cf6","#10b981","#f59e0b","#ef4444","#6366f1"];
+  const SENSOR_BG_CLASS = ["s0","s1","s2","s3","s4","s5"];
+  const METRIC_ORDER = ["voltage","current","power","energy","frequency","freq","pf"];
 
-  function goBack(){
-    window.location.href = "/";
-  }
+  function goBack(){ window.location.href = "/"; }
 
-  function formatNumber(v){
+  function fmtNum(v){
     const n = Number(v);
     if (Number.isNaN(n)) return "-";
+    if (Math.abs(n) >= 10000) return n.toFixed(0);
     if (Math.abs(n) >= 1000) return n.toFixed(1);
     if (Math.abs(n) >= 100) return n.toFixed(2);
     return n.toFixed(3);
   }
 
-  function prettyKey(k){
-    const low = String(k || "").toLowerCase();
-    if (labels[low]) return labels[low];
-    if (low.includes("freq")) return "Pzem3 Freq";
-    return String(k || "").replace(/[_.]/g, " ");
+  function fmtTime(iso){
+    if (!iso || iso === "-") return "-";
+    try {
+      const d = new Date(iso);
+      return d.toLocaleTimeString("en-GB", {hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    } catch(e){ return iso; }
   }
 
-  function renderSummary(values){
-    const grid = document.getElementById("summaryGrid");
+  function groupValues(values){
+    const sensors = {};
+    const device = {};
+    for (const [key, val] of Object.entries(values || {})){
+      const dot = key.indexOf(".");
+      if (dot > 0){
+        const group = key.substring(0, dot);
+        const metric = key.substring(dot + 1);
+        if (!sensors[group]) sensors[group] = {};
+        sensors[group][metric] = val;
+      } else {
+        device[key] = val;
+      }
+    }
+    return { sensors, device };
+  }
+
+  function getMetricMeta(metricKey){
+    const low = metricKey.toLowerCase();
+    return METRIC_META[low] || { label: metricKey, unit: "", color: "#6b7280" };
+  }
+
+  function renderSensors(values){
+    const container = document.getElementById("sensorsContainer");
     const empty = document.getElementById("summaryEmpty");
+    const deviceBar = document.getElementById("deviceBar");
     const keys = Object.keys(values || {});
-    grid.innerHTML = "";
+    container.innerHTML = "";
+
     if (!keys.length){
       empty.style.display = "block";
+      deviceBar.style.display = "none";
       return;
     }
     empty.style.display = "none";
 
-    keys.slice(0, 10).forEach((key) => {
-      const div = document.createElement("div");
-      div.className = "summary-item";
-      div.innerHTML = `<div class="k">${prettyKey(key)}</div><div class="v">${formatNumber(values[key])}</div>`;
-      grid.appendChild(div);
+    const { sensors, device } = groupValues(values);
+    const sensorNames = Object.keys(sensors).sort();
+
+    // Device info bar
+    if (Object.keys(device).length > 0){
+      deviceBar.style.display = "flex";
+      const parts = [];
+      for (const [k,v] of Object.entries(device)){
+        if (k === "device") continue;
+        let label = k.replace(/_/g," ");
+        let display = fmtNum(v);
+        if (k === "uptime_ms") {
+          const sec = Math.floor(v / 1000);
+          const h = Math.floor(sec / 3600);
+          const m = Math.floor((sec % 3600) / 60);
+          const s = sec % 60;
+          display = `${h}h ${m}m ${s}s`;
+          label = "Uptime";
+        }
+        if (k === "rssi") { display = fmtNum(v) + " dBm"; label = "RSSI"; }
+        parts.push(`<span class="di">${label}: <strong>${display}</strong></span>`);
+      }
+      deviceBar.innerHTML = parts.join("");
+    } else {
+      deviceBar.style.display = "none";
+    }
+
+    if (!sensorNames.length){
+      const section = document.createElement("div");
+      section.className = "sensor-grid";
+      for (const [k,v] of Object.entries(device)){
+        const meta = getMetricMeta(k);
+        section.innerHTML += `<div class="sensor-item"><div class="k">${meta.label}</div><div class="v">${fmtNum(v)}<span class="u">${meta.unit}</span></div></div>`;
+      }
+      container.appendChild(section);
+      return;
+    }
+
+    sensorNames.forEach((name, idx) => {
+      const metrics = sensors[name];
+      const color = SENSOR_COLORS[idx % SENSOR_COLORS.length];
+      const bgClass = SENSOR_BG_CLASS[idx % SENSOR_BG_CLASS.length];
+      const hasOk = metrics.ok !== undefined;
+      const isOk = metrics.ok === true || metrics.ok === 1;
+
+      const section = document.createElement("div");
+      section.className = `sensor-section ${bgClass}`;
+
+      const header = document.createElement("div");
+      header.className = "sensor-header";
+      header.innerHTML = `
+        <span class="sensor-dot" style="background:${color}"></span>
+        <h3>${name.toUpperCase()}</h3>
+        ${hasOk ? `<span class="sensor-status ${isOk ? 'ok' : 'off'}">${isOk ? 'OK' : 'OFFLINE'}</span>` : ''}
+      `;
+      section.appendChild(header);
+
+      const grid = document.createElement("div");
+      grid.className = "sensor-grid";
+      const sortedKeys = Object.keys(metrics)
+        .filter(k => k !== "ok")
+        .sort((a,b) => {
+          const ia = METRIC_ORDER.indexOf(a.toLowerCase());
+          const ib = METRIC_ORDER.indexOf(b.toLowerCase());
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        });
+
+      for (const mk of sortedKeys){
+        const meta = getMetricMeta(mk);
+        const div = document.createElement("div");
+        div.className = "sensor-item";
+        div.innerHTML = `<div class="k">${meta.label}</div><div class="v">${fmtNum(metrics[mk])}<span class="u">${meta.unit}</span></div>`;
+        grid.appendChild(div);
+      }
+      section.appendChild(grid);
+      container.appendChild(section);
     });
   }
 
@@ -364,32 +584,70 @@
   function renderCharts(trend, samples){
     const grid = document.getElementById("chartsGrid");
     const empty = document.getElementById("chartsEmpty");
+    const legend = document.getElementById("chartLegend");
     document.getElementById("sampleText").textContent = `Samples: ${samples || 0}`;
-    const keys = Object.keys(trend || {}).filter(k => (trend[k] || []).length > 1);
+
+    const byMetric = {};
+    const sensorSet = new Set();
+    for (const [key, points] of Object.entries(trend || {})){
+      if (!points || points.length < 2) continue;
+      const dot = key.indexOf(".");
+      if (dot <= 0) continue;
+      const sensor = key.substring(0, dot);
+      const metric = key.substring(dot + 1);
+      if (metric === "ok") continue;
+      if (!byMetric[metric]) byMetric[metric] = [];
+      byMetric[metric].push({ sensor, points });
+      sensorSet.add(sensor);
+    }
+
+    const metricKeys = Object.keys(byMetric).sort((a,b) => {
+      const ia = METRIC_ORDER.indexOf(a.toLowerCase());
+      const ib = METRIC_ORDER.indexOf(b.toLowerCase());
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+
     grid.innerHTML = "";
-    if (!keys.length){
+    if (!metricKeys.length){
       empty.style.display = "block";
+      legend.style.display = "none";
       return;
     }
     empty.style.display = "none";
 
-    keys.slice(0, 6).forEach((key) => {
-      const points = trend[key] || [];
-      const w = 620;
-      const h = 140;
-      const poly = buildPath(points, w, h);
-      const firstTs = points[0]?.ts || "-";
-      const lastTs = points[points.length - 1]?.ts || "-";
+    const sensorArr = [...sensorSet].sort();
+    if (sensorArr.length > 1){
+      legend.style.display = "flex";
+      legend.innerHTML = sensorArr.map((s, i) =>
+        `<span class="chart-legend-item"><span class="chart-legend-dot" style="background:${SENSOR_COLORS[i % SENSOR_COLORS.length]}"></span>${s.toUpperCase()}</span>`
+      ).join("");
+    } else {
+      legend.style.display = "none";
+    }
+
+    const w = 400, h = 100;
+    metricKeys.forEach(metric => {
+      const meta = getMetricMeta(metric);
+      const entries = byMetric[metric].sort((a,b) => a.sensor.localeCompare(b.sensor));
+      const firstPts = entries[0]?.points || [];
+      const firstTs = fmtTime(firstPts[0]?.ts);
+      const lastTs = fmtTime(firstPts[firstPts.length-1]?.ts);
+
+      const lines = entries.map((e) => {
+        const color = SENSOR_COLORS[sensorArr.indexOf(e.sensor) % SENSOR_COLORS.length];
+        const poly = buildPath(e.points, w, h);
+        return `<polyline points="${poly}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"></polyline>`;
+      }).join("\n");
 
       const item = document.createElement("div");
       item.className = "chart-item";
       item.innerHTML = `
         <div class="chart-title">
-          <strong>${prettyKey(key)}</strong>
-          <span class="chart-range">${firstTs} -> ${lastTs}</span>
+          <strong>${meta.label} ${meta.unit ? '(' + meta.unit + ')' : ''}</strong>
+          <span class="chart-range">${firstTs} - ${lastTs}</span>
         </div>
-        <svg viewBox="0 0 ${w} ${h}" class="chart-svg" preserveAspectRatio="none" aria-label="${key}">
-          <polyline points="${poly}" fill="none" stroke="#2563eb" stroke-width="2"></polyline>
+        <svg viewBox="0 0 ${w} ${h}" class="chart-svg" preserveAspectRatio="none">
+          ${lines}
         </svg>
       `;
       grid.appendChild(item);
@@ -399,27 +657,22 @@
   function setStatusBadge(connected, hasError){
     const badge = document.getElementById("connBadge");
     badge.classList.remove("ok", "warn", "err");
-    if (connected){
-      badge.classList.add("ok");
-      badge.textContent = "Connected";
-      return;
-    }
-    if (hasError){
-      badge.classList.add("err");
-      badge.textContent = "API Error";
-      return;
-    }
-    badge.classList.add("warn");
-    badge.textContent = "Disconnected";
+    if (connected){ badge.classList.add("ok"); badge.textContent = "Connected"; return; }
+    if (hasError){ badge.classList.add("err"); badge.textContent = "API Error"; return; }
+    badge.classList.add("warn"); badge.textContent = "Disconnected";
+  }
+
+  function prettyPayload(raw){
+    try {
+      return JSON.stringify(JSON.parse(raw), null, 2);
+    } catch(e){ return raw; }
   }
 
   async function loadStatus(){
     const errBox = document.getElementById("errBox");
     try{
       const res = await fetch("/api/iot-monitor/status", { cache: "no-store" });
-      if (!res.ok){
-        throw new Error(`HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setStatusBadge(!!data.connected, false);
 
@@ -428,19 +681,14 @@
       document.getElementById("topicMetaText").textContent = data.topic || "-";
       document.getElementById("clientText").textContent = data.client_id || "-";
       document.getElementById("countText").textContent = `${data.message_count || 0} / ${data.parse_error_count || 0}`;
-      document.getElementById("lastMsgText").textContent = `Last message: ${data.last_message_at || "-"}`;
-      document.getElementById("payloadText").textContent = data.last_payload || "-";
+      document.getElementById("lastMsgText").textContent = `Last: ${fmtTime(data.last_message_at)}`;
+      document.getElementById("payloadText").textContent = prettyPayload(data.last_payload || "-");
 
       const errText = data.last_error || "";
-      if (errText){
-        errBox.style.display = "block";
-        errBox.textContent = errText;
-      } else {
-        errBox.style.display = "none";
-        errBox.textContent = "";
-      }
+      if (errText){ errBox.style.display = "block"; errBox.textContent = errText; }
+      else { errBox.style.display = "none"; errBox.textContent = ""; }
 
-      renderSummary(data.latest_values || {});
+      renderSensors(data.latest_values || {});
       renderCharts(data.trend || {}, data.samples || 0);
     } catch (err){
       setStatusBadge(false, true);
@@ -449,9 +697,65 @@
     }
   }
 
+  function toggleConfig(){
+    const panel = document.getElementById("configPanel");
+    panel.classList.toggle("open");
+    if (panel.classList.contains("open")){
+      // Pre-fill with current values
+      document.getElementById("cfgHost").placeholder = document.getElementById("brokerText").textContent.split(":")[0] || "10.206.9.201";
+      const brokerParts = (document.getElementById("brokerText").textContent || "").split(":");
+      document.getElementById("cfgPort").placeholder = brokerParts[1] || "1883";
+      document.getElementById("cfgTopic").placeholder = document.getElementById("topicMetaText").textContent || "power/pzem";
+    }
+  }
+
+  async function doReconnect(){
+    const btn = document.getElementById("btnReconnect");
+    const status = document.getElementById("configStatus");
+    btn.disabled = true;
+    btn.textContent = "Connecting...";
+    status.className = "config-status";
+    status.style.display = "none";
+
+    const host = document.getElementById("cfgHost").value.trim();
+    const port = document.getElementById("cfgPort").value.trim();
+    const topic = document.getElementById("cfgTopic").value.trim();
+
+    const body = {};
+    if (host) body.host = host;
+    if (port) body.port = parseInt(port);
+    if (topic) body.topic = topic;
+
+    try {
+      const res = await fetch("/api/iot-monitor/reconnect", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data.ok){
+        status.className = "config-status ok";
+        status.style.display = "block";
+        status.textContent = `Reconnecting to ${data.host}:${data.port} topic: ${data.topic}`;
+        // Clear inputs
+        document.getElementById("cfgHost").value = "";
+        document.getElementById("cfgPort").value = "";
+        document.getElementById("cfgTopic").value = "";
+      } else {
+        throw new Error(data.detail || "Unknown error");
+      }
+    } catch(err){
+      status.className = "config-status err";
+      status.style.display = "block";
+      status.textContent = `Failed: ${err}`;
+    }
+    btn.disabled = false;
+    btn.textContent = "Reconnect";
+    setTimeout(() => { status.style.display = "none"; }, 5000);
+  }
+
   loadStatus();
   setInterval(loadStatus, 2000);
 </script>
 </body>
 </html>
-

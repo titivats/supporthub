@@ -3,6 +3,7 @@
 from typing import Dict, List, Optional, Set
 import json
 import os
+import re
 import threading
 from pathlib import Path
 
@@ -461,11 +462,71 @@ def _write_line_machine_map_file(path: Path, line_machine_map: Dict[str, List[st
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(normalized, ensure_ascii=False, indent=2), encoding="utf-8")
 
+
+_LINE_MACHINE_AUDIT_ITEM_PATTERN = re.compile(
+    r"^\s*(?P<line>.+?)\s*->\s*(?P<type>.+?)\s*(?:\((?P<id>[^()]*)\))?\s*$"
+)
+
+
+def _parse_line_machine_map_audit_item(raw_item: Optional[str]) -> tuple[str, str]:
+    text = _clean_text(raw_item)
+    if not text:
+        return "", ""
+
+    matched = _LINE_MACHINE_AUDIT_ITEM_PATTERN.match(text)
+    if not matched:
+        return "", ""
+
+    line_val = _clean_text(matched.group("line")).upper()
+    machine_type = _clean_text(matched.group("type"))
+    machine_id = _clean_text(matched.group("id"))
+    if not line_val or not machine_type:
+        return "", ""
+
+    normalized_item = machine_type
+    if machine_id and machine_id != "-":
+        normalized_item = f"{machine_type}{LINE_MACHINE_ITEM_SEPARATOR}{machine_id}"
+    return line_val, normalized_item
+
+
+def _load_line_machine_map_from_audit(db: Session) -> Dict[str, List[str]]:
+    rows = (
+        db.query(MasterAuditLog)
+        .filter(MasterAuditLog.data_type == "LINE_MACHINE_MAP")
+        .order_by(MasterAuditLog.created_at.asc(), MasterAuditLog.id.asc())
+        .all()
+    )
+    if not rows:
+        return {}
+
+    line_machine_map: Dict[str, List[str]] = {}
+    for row in rows:
+        line_val, item_val = _parse_line_machine_map_audit_item(getattr(row, "item", ""))
+        if not line_val or not item_val:
+            continue
+
+        action = _clean_text(getattr(row, "action", "")).upper()
+        existing = list(line_machine_map.get(line_val, []))
+        if action == "DELETE":
+            kept = [val for val in existing if _clean_text(val).lower() != item_val.lower()]
+            if kept:
+                line_machine_map[line_val] = kept
+            else:
+                line_machine_map.pop(line_val, None)
+            continue
+
+        if not any(_clean_text(val).lower() == item_val.lower() for val in existing):
+            existing.append(item_val)
+            line_machine_map[line_val] = existing
+
+    return _normalize_line_machine_map(line_machine_map)
+
+
 def _get_line_machine_map(db: Session) -> Dict[str, List[str]]:
     # Monitoring mapping is file-based to keep it outside PostgreSQL.
     map_file = _line_machine_map_path()
     file_map = _read_line_machine_map_file(map_file)
-    if not map_file.exists():
+    if not file_map:
         # One-time fallback: migrate legacy mapping from app_settings if present.
         row = db.query(AppSetting).filter(AppSetting.key == LINE_MACHINE_MAP_SETTING_KEY).first()
         if row and _clean_text(row.value):
@@ -477,6 +538,16 @@ def _get_line_machine_map(db: Session) -> Dict[str, List[str]]:
             if normalized:
                 _write_line_machine_map_file(map_file, normalized)
                 file_map = normalized
+    if not file_map:
+        # Fallback for pulled/fresh workspace: rebuild mapping from audit logs.
+        audit_map = _load_line_machine_map_from_audit(db)
+        if audit_map:
+            _write_line_machine_map_file(map_file, audit_map)
+            file_map = audit_map
+            try:
+                refresh_postgres_line_to_monitoring_page_table()
+            except Exception as exc:
+                print("[WARN] refresh_postgres_line_to_monitoring_page_table error:", exc)
 
     allowed_lines, machine_type_lookup, machine_id_lookup = _build_line_machine_lookup(db)
     sanitized = _sanitize_line_machine_map(

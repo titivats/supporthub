@@ -364,17 +364,9 @@
   let supportAreaMap = {};
   try{ supportAreaMap = JSON.parse(document.getElementById('support-area-map-data').textContent || "{}"); }catch(_){ supportAreaMap = {}; }
 
-  const LEGACY_SUPPORT_AREA_MAP = {
-    "Backline": ["Wave Soldering","Auto Insertion","Router","Cleaning Machine"],
-    "Inspection": ["AOI Wave","AOI Coating","X-ray"],
-    "Coating & Robotic": ["RTV","Coating","UV Curing","Robotic"],
-    "Rework": ["Rework Machine"],
-    "Etc..": ["Etc.."]
-  };
   const supportAreaMapByNorm = (() => {
-    const src = Object.keys(supportAreaMap || {}).length ? supportAreaMap : LEGACY_SUPPORT_AREA_MAP;
     const out = {};
-    Object.keys(src).forEach(area => { out[norm(area)] = unique(src[area] || []); });
+    Object.keys(supportAreaMap || {}).forEach(area => { out[norm(area)] = unique(supportAreaMap[area] || []); });
     return out;
   })();
 
@@ -549,7 +541,7 @@
       const allowed = new Set(allowedMachinesFor(area).map(norm));
       out = out.filter(t => allowed.has(norm(t)));
     }
-    if(lineScope.hasMapping && lineScope.allowedMachines.size){
+    if(lineScope.hasMapping){
       out = out.filter(t => lineScope.allowedMachines.has(norm(t)));
     }
     return out.sort((a,b)=>a.localeCompare(b, undefined, { sensitivity:'base', numeric:true }));
@@ -572,11 +564,13 @@
     let brands = (machineTypeMap[type]||[]).filter(n=>!removedMachines.has(n));
     if(lineScope.hasMapping){
       const machineKey = norm(type);
-      const allowedBrands = lineScope.allowedBrandsByMachine[machineKey];
-      if(allowedBrands && allowedBrands.size){
-        brands = brands.filter(brand => allowedBrands.has(norm(brand)));
-      }else if(lineScope.allowedMachines.size && !lineScope.allowedMachines.has(machineKey)){
+      if(!lineScope.allowedMachines.has(machineKey)){
         brands = [];
+      }else{
+        const allowedBrands = lineScope.allowedBrandsByMachine[machineKey];
+        if(allowedBrands && allowedBrands.size){
+          brands = brands.filter(brand => allowedBrands.has(norm(brand)));
+        }
       }
     }
     eqSel.innerHTML = '<option value="">-- Select Machine Type --</option>';
