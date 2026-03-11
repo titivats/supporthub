@@ -265,6 +265,35 @@ class IoTMonitorService:
             except Exception as exc:
                 self.last_error = f"MQTT setup failed: {exc}"
 
+    def reconnect(self, host: str | None = None, port: int | None = None,
+                  topic: str | None = None, client_id: str | None = None) -> Dict[str, Any]:
+        """Stop, update config, restart. Returns new config dict."""
+        self.stop()
+        with self._lock:
+            if host is not None:
+                self.host = host.strip() or self.host
+            if port is not None:
+                self.port = port
+            if topic is not None:
+                self.topic = topic.strip() or self.topic
+            if client_id is not None:
+                self.client_id = client_id.strip() or self.client_id
+            # Clear old data
+            self.latest_values.clear()
+            self.series.clear()
+            self.message_count = 0
+            self.parse_error_count = 0
+            self.last_payload = "-"
+            self.last_message_at = None
+            self.last_error = ""
+        self.start()
+        return {
+            "host": self.host,
+            "port": self.port,
+            "topic": self.topic,
+            "client_id": self.client_id,
+        }
+
     def stop(self) -> None:
         with self._lock:
             if not self._started:
