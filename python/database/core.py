@@ -179,6 +179,23 @@ class MasterSupportAreaMap(Base):
     __table_args__ = (UniqueConstraint("support_area", "machine", name="uq_master_support_area_machine"),)
 
 
+class MasterLineMonitoringMap(Base):
+    __tablename__ = "master_line_monitoring_maps"
+    id = Column(Integer, primary_key=True)
+    line_no = Column(String(50), nullable=False, index=True)
+    machine_type = Column(String(100), nullable=False, index=True)
+    machine_id = Column(String(100), nullable=False, default="-")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    __table_args__ = (
+        UniqueConstraint(
+            "line_no",
+            "machine_type",
+            "machine_id",
+            name="uq_master_line_monitoring_map",
+        ),
+    )
+
+
 class AppSetting(Base):
     __tablename__ = "app_settings"
     id = Column(Integer, primary_key=True)
@@ -613,6 +630,31 @@ def _normalize_line_monitoring_rows(raw_map):
 
 
 def _load_line_monitoring_rows_for_postgres(con):
+    line_map_table_exists = con.execute(
+        text("SELECT to_regclass('public.master_line_monitoring_maps')")
+    ).scalar()
+    if line_map_table_exists:
+        db_rows = con.execute(
+            text(
+                """
+                SELECT line_no, machine_type, machine_id
+                FROM public.master_line_monitoring_maps
+                ORDER BY line_no ASC, machine_type ASC, machine_id ASC, id ASC
+                """
+            )
+        ).mappings().all()
+        if db_rows:
+            return [
+                {
+                    "line_no": str(r["line_no"] or "").strip().upper(),
+                    "machine_type": str(r["machine_type"] or "").strip(),
+                    "machine_id": str(r["machine_id"] or "").strip() or "-",
+                    "action": "",
+                }
+                for r in db_rows
+                if str(r["line_no"] or "").strip() and str(r["machine_type"] or "").strip()
+            ]
+
     raw_map = _load_line_monitoring_raw_from_file()
     if raw_map:
         return _normalize_line_monitoring_rows(raw_map)

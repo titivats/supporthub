@@ -24,6 +24,7 @@ from python.db import (
     AppSetting,
     MasterAuditLog,
     MasterLine,
+    MasterLineMonitoringMap,
     MasterMachine,
     MasterMachineId,
     MasterMachineType,
@@ -36,7 +37,6 @@ from python.db import (
     User,
     get_db,
     init_db,
-    refresh_postgres_line_to_monitoring_page_table,
 )
 from python.notify import line_notify
 from python.OEE.oee_metrics import build_monitoring_line_metrics, build_monitoring_metrics, parse_th_date_range
@@ -131,7 +131,7 @@ DEFAULT_SUPPORT_AREA_MAP = {
     "Etc..": ["Etc.."],
 }
 LINE_MACHINE_MAP_SETTING_KEY = "line_machine_map_v1"
-DEFAULT_LINE_MACHINE_MAP_FILE = "database/monitoring_line_map.json"
+LEGACY_LINE_MACHINE_MAP_FILE = "database/monitoring_line_map.json"
 LINE_MACHINE_MAP_FILE_ENV = "SUPPORTHUB_LINE_MACHINE_MAP_FILE"
 LINE_MACHINE_ITEM_SEPARATOR = "|||"
 
@@ -441,13 +441,13 @@ def _sanitize_line_machine_map(
             out[line_no] = sorted(kept, key=lambda s: s.lower())
     return out
 
-def _line_machine_map_path() -> Path:
+def _legacy_line_machine_map_path() -> Path:
     custom_path = _clean_text(os.getenv(LINE_MACHINE_MAP_FILE_ENV))
     if custom_path:
         return Path(custom_path).expanduser()
-    return Path(__file__).resolve().parents[1] / DEFAULT_LINE_MACHINE_MAP_FILE
+    return Path(__file__).resolve().parents[1] / LEGACY_LINE_MACHINE_MAP_FILE
 
-def _read_line_machine_map_file(path: Path) -> Dict[str, List[str]]:
+def _read_legacy_line_machine_map_file(path: Path) -> Dict[str, List[str]]:
     if not path.exists():
         return {}
     try:
@@ -456,11 +456,6 @@ def _read_line_machine_map_file(path: Path) -> Dict[str, List[str]]:
         print(f"[WARN] Failed to read monitoring map file: {path} ({e})")
         return {}
     return _normalize_line_machine_map(raw)
-
-def _write_line_machine_map_file(path: Path, line_machine_map: Dict[str, List[str]]) -> None:
-    normalized = _normalize_line_machine_map(line_machine_map)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(normalized, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 _LINE_MACHINE_AUDIT_ITEM_PATTERN = re.compile(
@@ -522,58 +517,119 @@ def _load_line_machine_map_from_audit(db: Session) -> Dict[str, List[str]]:
     return _normalize_line_machine_map(line_machine_map)
 
 
-def _get_line_machine_map(db: Session) -> Dict[str, List[str]]:
-    # Monitoring mapping is file-based to keep it outside PostgreSQL.
-    map_file = _line_machine_map_path()
-    file_map = _read_line_machine_map_file(map_file)
-    if not file_map:
-        # One-time fallback: migrate legacy mapping from app_settings if present.
+def _load_line_machine_map_from_db(db: Session) -> Dict[str, List[str]]:
+    out: Dict[str, List[str]] = {}
+    rows = (
+        db.query(MasterLineMonitoringMap)
+        .order_by(
+            MasterLineMonitoringMap.line_no.asc(),
+            MasterLineMonitoringMap.machine_type.asc(),
+            MasterLineMonitoringMap.machine_id.asc(),
+            MasterLineMonitoringMap.id.asc(),
+        )
+        .all()
+    )
+    for row in rows:
+        line_no = _clean_text(row.line_no).upper()
+        machine_type = _clean_text(row.machine_type)
+        machine_id = _clean_text(row.machine_id)
+        if not line_no or not machine_type:
+            continue
+        normalized_item = machine_type
+        if machine_id and machine_id != "-":
+            normalized_item = f"{machine_type}{LINE_MACHINE_ITEM_SEPARATOR}{machine_id}"
+        _append_unique_casefold(out.setdefault(line_no, []), normalized_item)
+    return _normalize_line_machine_map(out)
+
+
+def _replace_line_machine_map_in_db(db: Session, line_machine_map: Dict[str, List[str]]) -> None:
+    normalized = _normalize_line_machine_map(line_machine_map)
+    db.query(MasterLineMonitoringMap).delete(synchronize_session=False)
+    for line_no, items in normalized.items():
+        for raw_item in items:
+            machine_type, machine_id = _split_line_machine_item(raw_item)
+            if not machine_type:
+                continue
+            db.add(
+                MasterLineMonitoringMap(
+                    line_no=line_no,
+                    machine_type=machine_type,
+                    machine_id=machine_id or "-",
+                )
+            )
+    db.flush()
+
+
+def _bootstrap_line_machine_map_from_legacy_sources(db: Session) -> None:
+    if db.query(MasterLineMonitoringMap.id).first():
+        return
+
+    legacy_map = _read_legacy_line_machine_map_file(_legacy_line_machine_map_path())
+
+    if not legacy_map:
         row = db.query(AppSetting).filter(AppSetting.key == LINE_MACHINE_MAP_SETTING_KEY).first()
         if row and _clean_text(row.value):
             try:
                 raw = json.loads(row.value)
             except Exception:
                 raw = {}
-            normalized = _normalize_line_machine_map(raw)
-            if normalized:
-                _write_line_machine_map_file(map_file, normalized)
-                file_map = normalized
-    if not file_map:
-        # Fallback for pulled/fresh workspace: rebuild mapping from audit logs.
-        audit_map = _load_line_machine_map_from_audit(db)
-        if audit_map:
-            _write_line_machine_map_file(map_file, audit_map)
-            file_map = audit_map
-            try:
-                refresh_postgres_line_to_monitoring_page_table()
-            except Exception as exc:
-                print("[WARN] refresh_postgres_line_to_monitoring_page_table error:", exc)
+            legacy_map = _normalize_line_machine_map(raw)
+
+    if not legacy_map:
+        legacy_map = _load_line_machine_map_from_audit(db)
+
+    if not legacy_map:
+        return
 
     allowed_lines, machine_type_lookup, machine_id_lookup = _build_line_machine_lookup(db)
     sanitized = _sanitize_line_machine_map(
-        file_map,
+        legacy_map,
         allowed_lines,
         machine_type_lookup,
         machine_id_lookup,
     )
+    if not sanitized:
+        return
 
-    if sanitized != file_map:
-        _write_line_machine_map_file(map_file, sanitized)
-    return sanitized
-
-def _save_line_machine_map(db: Session, line_machine_map: Dict[str, List[str]]) -> None:
-    map_file = _line_machine_map_path()
-    _write_line_machine_map_file(map_file, line_machine_map)
-
-    # Remove old app_settings row so Monitoring no longer stores this in DB.
+    _replace_line_machine_map_in_db(db, sanitized)
     row = db.query(AppSetting).filter(AppSetting.key == LINE_MACHINE_MAP_SETTING_KEY).first()
     if row:
         db.delete(row)
+    db.commit()
 
+
+def _get_line_machine_map(db: Session) -> Dict[str, List[str]]:
     try:
-        refresh_postgres_line_to_monitoring_page_table()
+        _bootstrap_line_machine_map_from_legacy_sources(db)
     except Exception as exc:
-        print("[WARN] refresh_postgres_line_to_monitoring_page_table error:", exc)
+        db.rollback()
+        print("[WARN] bootstrap line-monitoring map from legacy sources failed:", exc)
+
+    db_map = _load_line_machine_map_from_db(db)
+
+    allowed_lines, machine_type_lookup, machine_id_lookup = _build_line_machine_lookup(db)
+    sanitized = _sanitize_line_machine_map(
+        db_map,
+        allowed_lines,
+        machine_type_lookup,
+        machine_id_lookup,
+    )
+    return sanitized
+
+def _save_line_machine_map(db: Session, line_machine_map: Dict[str, List[str]]) -> None:
+    allowed_lines, machine_type_lookup, machine_id_lookup = _build_line_machine_lookup(db)
+    sanitized = _sanitize_line_machine_map(
+        line_machine_map,
+        allowed_lines,
+        machine_type_lookup,
+        machine_id_lookup,
+    )
+    _replace_line_machine_map_in_db(db, sanitized)
+
+    # Keep old key cleaned up after moving to PostgreSQL table storage.
+    row = db.query(AppSetting).filter(AppSetting.key == LINE_MACHINE_MAP_SETTING_KEY).first()
+    if row:
+        db.delete(row)
 
 def _build_monitoring_item_options(
     machine_list: List[str],

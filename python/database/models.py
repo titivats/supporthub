@@ -2,6 +2,7 @@ from python.database.core import (
     AppSetting,
     MasterAuditLog,
     MasterLine,
+    MasterLineMonitoringMap,
     MasterMachine,
     MasterMachineId,
     MasterMachineType,
@@ -18,6 +19,7 @@ __all__ = [
     "Ticket",
     "TicketTakeoverLog",
     "MasterLine",
+    "MasterLineMonitoringMap",
     "MasterMachine",
     "MasterMachineType",
     "MasterMachineId",
@@ -27,4 +29,3 @@ __all__ = [
     "AppSetting",
     "MasterAuditLog",
 ]
-
