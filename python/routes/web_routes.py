@@ -561,6 +561,8 @@ def register_web_routes(app, templates, deps):
         "_apply_line_support_area_filter": _apply_line_support_area_filter,
         "_build_monitoring_line_chart_metrics": _build_monitoring_line_chart_metrics,
         "_normalize_history_filters": _normalize_history_filters,
+        "_build_history_type_lookup": _build_history_type_lookup,
+        "_parse_ticket_machine_and_brand": _parse_ticket_machine_and_brand,
         "_apply_history_machine_filters": _apply_history_machine_filters,
         "_apply_problem_match_class_filter": _apply_problem_match_class_filter,
         "MONITORING_DOWNTIME_CLASS": MONITORING_DOWNTIME_CLASS,

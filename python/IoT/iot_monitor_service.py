@@ -10,7 +10,7 @@ from typing import Any, Dict
 
 from sqlalchemy import text
 
-from python.db import SessionLocal, engine
+from python.database import SessionLocal, engine
 
 try:
     import paho.mqtt.client as mqtt
@@ -410,4 +410,3 @@ class IoTMonitorService:
 
 
 iot_monitor = IoTMonitorService()
-

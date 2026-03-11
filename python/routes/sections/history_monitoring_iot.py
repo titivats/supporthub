@@ -19,6 +19,8 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
     parse_th_date_range = ctx["parse_th_date_range"]
     build_monitoring_metrics = ctx["build_monitoring_metrics"]
     build_monitoring_line_metrics = ctx["build_monitoring_line_metrics"]
+    _build_history_type_lookup = ctx["_build_history_type_lookup"]
+    _parse_ticket_machine_and_brand = ctx["_parse_ticket_machine_and_brand"]
     _apply_history_machine_filters = ctx["_apply_history_machine_filters"]
     _apply_problem_match_class_filter = ctx["_apply_problem_match_class_filter"]
     MONITORING_DOWNTIME_CLASS = ctx["MONITORING_DOWNTIME_CLASS"]
@@ -44,42 +46,6 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
         if end_utc:
             q = q.filter(Ticket.created_at <= end_utc)
         return q.order_by(Ticket.closed_at.desc().nullslast()).all()
-
-    def _build_history_type_lookup(machine_type_map: Dict[str, List[str]]) -> tuple[Dict[str, str], Dict[str, str]]:
-        type_by_key: Dict[str, str] = {}
-        brand_to_type: Dict[str, str] = {}
-
-        for machine_type, brands in (machine_type_map or {}).items():
-            machine_type_val = _clean_text(machine_type)
-            if not machine_type_val:
-                continue
-            type_by_key[machine_type_val.lower()] = machine_type_val
-            brand_to_type.setdefault(machine_type_val.lower(), machine_type_val)
-            for brand in brands or []:
-                brand_val = _clean_text(brand)
-                if not brand_val:
-                    continue
-                brand_to_type.setdefault(brand_val.lower(), machine_type_val)
-
-        return type_by_key, brand_to_type
-
-    def _parse_ticket_machine_and_brand(raw_equipment: Optional[str],
-                                        type_by_key: Dict[str, str],
-                                        brand_to_type: Dict[str, str]) -> tuple[str, str]:
-        raw = _clean_text(raw_equipment)
-        if "||" in raw:
-            left, right = raw.split("||", 1)
-            return _clean_text(left), _clean_text(right)
-
-        brand = raw
-        if not brand:
-            return "", ""
-
-        if brand.lower() == "other m/c or tools":
-            return "Etc..", brand
-
-        machine_type = type_by_key.get(brand.lower()) or brand_to_type.get(brand.lower(), "")
-        return machine_type, brand
 
     def _build_takeover_logs_map(db: Session, ticket_ids: List[int]) -> Dict[int, List[TicketTakeoverLog]]:
         out: Dict[int, List[TicketTakeoverLog]] = {}
