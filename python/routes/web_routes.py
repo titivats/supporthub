@@ -10,6 +10,7 @@ from python.routes.sections import (
     register_admin_machines_routes,
     register_auth_user_routes,
     register_history_monitoring_iot_routes,
+    register_problem_match_routes,
     register_ticket_action_routes,
 )
 
@@ -24,6 +25,8 @@ def register_web_routes(app, templates, deps):
     MasterMachineType = deps["MasterMachineType"]
     MasterMachineId = deps["MasterMachineId"]
     MasterProblem = deps["MasterProblem"]
+    ProblemClass = deps["ProblemClass"]
+    ProblemMatch = deps["ProblemMatch"]
     MasterSupportArea = deps["MasterSupportArea"]
     MasterSupportAreaMap = deps["MasterSupportAreaMap"]
     BadSignature = deps["BadSignature"]
@@ -486,6 +489,8 @@ def register_web_routes(app, templates, deps):
         "MasterMachineType": MasterMachineType,
         "MasterMachineId": MasterMachineId,
         "MasterProblem": MasterProblem,
+        "ProblemClass": ProblemClass,
+        "ProblemMatch": ProblemMatch,
         "MasterSupportArea": MasterSupportArea,
         "MasterSupportAreaMap": MasterSupportAreaMap,
         "SECURE_COOKIES": SECURE_COOKIES,
@@ -532,5 +537,6 @@ def register_web_routes(app, templates, deps):
 
     register_auth_user_routes(app, templates, route_ctx)
     register_admin_machines_routes(app, templates, route_ctx)
+    register_problem_match_routes(app, templates, route_ctx)
     register_ticket_action_routes(app, templates, route_ctx)
     register_history_monitoring_iot_routes(app, templates, route_ctx)

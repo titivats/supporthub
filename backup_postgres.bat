@@ -4,7 +4,7 @@ setlocal
 rem ============================================================
 rem  backup_postgres.bat
 rem    - Read SUPPORTHUB_DATABASE_URL from web.config
-rem    - Dump PostgreSQL database to backup\postgres\*.sql
+rem    - Dump current PostgreSQL database (schema + data) to backup\postgres\*.backup
 rem    - Keep backup files for KEEP_DAYS
 rem ============================================================
 
@@ -41,6 +41,14 @@ if not errorlevel 1 (
 )
 
 set "PG_DUMP_URL=%SUPPORTHUB_DATABASE_URL:postgresql+psycopg://=postgresql://%"
+set "PG_BIN_DEFAULT=C:\Program Files\PostgreSQL\18\bin"
+
+pg_dump --version >nul 2>&1
+if errorlevel 1 (
+  if exist "%PG_BIN_DEFAULT%\pg_dump.exe" (
+    set "PATH=%PG_BIN_DEFAULT%;%PATH%"
+  )
+)
 
 pg_dump --version >nul 2>&1
 if errorlevel 1 (
@@ -49,13 +57,13 @@ if errorlevel 1 (
   goto :END
 )
 
-for /f %%A in ('powershell -NoProfile -Command "(Get-Date).ToString('yyyyMMdd_HHmmss')"') do set "TS=%%A"
-set "OUT_FILE=%BACKUP_DIR%\supporthub_%TS%.sql"
+for /f %%A in ('powershell -NoProfile -Command "(Get-Date).ToString('dd_MM_yyyy')"') do set "TS=%%A"
+set "OUT_FILE=%BACKUP_DIR%\%TS%-db.backup"
 
 echo [RUN] Backing up PostgreSQL to:
 echo       %OUT_FILE%
 
-pg_dump --dbname="%PG_DUMP_URL%" --format=plain --encoding=UTF8 --no-owner --no-privileges --file="%OUT_FILE%"
+pg_dump --dbname="%PG_DUMP_URL%" --format=custom --blobs --encoding=UTF8 --no-owner --no-privileges --file="%OUT_FILE%"
 if errorlevel 1 (
   echo [ERROR] Backup failed.
   goto :END
@@ -64,7 +72,7 @@ if errorlevel 1 (
 echo [OK] Backup created.
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "Get-ChildItem -Path '%BACKUP_DIR%' -Filter '*.sql' | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-%KEEP_DAYS%) } | Remove-Item -Force -ErrorAction SilentlyContinue"
+  "Get-ChildItem -Path '%BACKUP_DIR%' -Filter '*.backup' | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-%KEEP_DAYS%) } | Remove-Item -Force -ErrorAction SilentlyContinue"
 
 echo [OK] Cleanup old backups older than %KEEP_DAYS% days completed.
 

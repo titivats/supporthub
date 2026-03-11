@@ -215,6 +215,25 @@ class MasterAuditLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
+class ProblemClass(Base):
+    __tablename__ = "problem_classes"
+    id = Column(Integer, primary_key=True)
+    class_name = Column(String(100), nullable=False, unique=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class ProblemMatch(Base):
+    __tablename__ = "problem_matches"
+    id = Column(Integer, primary_key=True)
+    machine = Column(String(100), nullable=False, index=True)
+    problem = Column(String(150), nullable=False, index=True)
+    class_name = Column(String(100), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    __table_args__ = (
+        UniqueConstraint("machine", "problem", name="uq_problem_match_machine_problem"),
+    )
+
+
 def get_db():
     db = SessionLocal()
     try:
