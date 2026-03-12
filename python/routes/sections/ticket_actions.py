@@ -11,7 +11,6 @@ def register_ticket_action_routes(app, templates, ctx):
     Ticket = ctx["Ticket"]
     TicketTakeoverLog = ctx["TicketTakeoverLog"]
     verify_password = ctx["verify_password"]
-    line_notify = ctx["line_notify"]
     fmt_th = ctx["fmt_th"]
     _clean_text = ctx["_clean_text"]
     _build_master_data = ctx["_build_master_data"]
@@ -72,7 +71,6 @@ def register_ticket_action_routes(app, templates, ctx):
         db.add(t)
         db.commit()
         bump_active_version()  # important: notify Active Tickets page to refresh quickly
-        line_notify(f"[REQUEST] {t.machine} | {t.equipment or '-'} | {t.machine_id or '-'} | {t.problem or '-'} by {t.requester}")
         return RedirectResponse("/", status_code=303)
 
     @app.post("/tickets/{ticket_id}/action")

@@ -4,7 +4,6 @@ jinja2
 SQLAlchemy>=2
 psycopg[binary]>=3.2
 itsdangerous
-requests
 python-multipart
 xlsxwriter
 paho-mqtt

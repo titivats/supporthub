@@ -18,6 +18,21 @@ from python.auth import (
     sha256,
     verify_password,
 )
+from python.config_defaults import (
+    DEFAULT_SUPPORT_AREAS,
+    DEFAULT_SUPPORT_AREA_MAP,
+    EQUIPMENTS,
+    EXTRA_LINE_OPS,
+    LEGACY_LINE_MACHINE_MAP_FILE,
+    LINE_MACHINE_ITEM_SEPARATOR,
+    LINE_MACHINE_MAP_FILE_ENV,
+    LINE_MACHINE_MAP_SETTING_KEY,
+    LINE_OPS,
+    MACHINE_TYPE_MAP_DEFAULT,
+    MASTER_SEED_KEY,
+    MASTER_STATUS_TEXT,
+    PROBLEM_MAP,
+)
 from python.database import (
     AppSetting,
     MasterAuditLog,
@@ -38,11 +53,14 @@ from python.database import (
     get_db,
     init_db,
 )
-from python.notify import line_notify
-from python.OEE.oee_metrics import build_monitoring_line_metrics, build_monitoring_metrics, parse_th_date_range
+from python.monitor.monitor_service import (
+    build_monitoring_line_metrics,
+    build_monitoring_metrics,
+    parse_th_date_range,
+)
 from python.time_utils import TH_OFFSET, fmt_hms as _fmt_hms, fmt_th
 
-from python.IoT.iot_monitor_service import iot_monitor
+from python.iot_monitor.iot_monitor_service import iot_monitor
 
 app = FastAPI(title="SupportHub")
 from fastapi.templating import Jinja2Templates
@@ -79,98 +97,6 @@ def api_active_version():
     # Used by index.html polling script for lightweight active-ticket refresh.
     return {"version": current_active_version()}
 
-# ---------- Master data ----------
-LINE_OPS = ["BT01","BT02","BT03","BT04","BT05","BT06","BT07","BT08","BT09"]
-
-EQUIPMENTS = [
-    "Wave Soldering","AOI Wave","AOI Coating","X-ray","RTV","Coating",
-    "Robot Packing","Conveyor","Auto Insertion","Router",
-    "KED Cleaning Pallet","KED Cleaning PCB","DCT Cleaning PCB","Etc..",
-]
-
-PROBLEM_MAP = {
-    "Wave Soldering": ["Covert Program", "Clean Nozzle", "Flux Empty", "Fill Solder", "Machine Down", "Board Drop", "Fine-tune Program"],
-    "AOI Wave": ["Covert Program", "Machine Down", "Full Storage Data", "Board Drop", "Fine-tune Program"],
-    "AOI Coating": ["Covert Program", "Machine Down", "Full Storage Data", "Board Drop", "Fine-tune Program"],
-    "X-ray": ["Covert Program", "Machine Down", "Full Storage Data", "Board Drop", "Fine-tune Program"],
-    "RTV": ["Covert Program", "Nozzle Broken", "Nozzle Clog", "Fill Glue", "Fill Coating Liquid", "Machine Down", "Board Drop", "Fine-tune Program"],
-    "Coating": ["Covert Program", "Nozzle Broken", "Nozzle Clog", "Fill Glue", "Fill Coating Liquid", "Machine Down", "Board Drop", "Fine-tune Program"],
-    "Robot Packing": ["Covert Program", "Machine Down", "Sensors Error", "Vacuum Error", "Camera Error", "Board Drop", "Robot not movement", "Robot Error"],
-    "Conveyor": ["Machine Down", "Board Can't Transfer", "Board Drop"],
-    "Auto Insertion": ["Covert Program", "Machine Down", "Can't Placement Part", "Fine-tune Program"],
-    "Router": ["Covert Program", "Machine Down", "Change Router Bit", "Router Bit Broken", "Dust Cabinet Not Working", "Fine-tune Program"],
-    "KED Cleaning Pallet": ["Covert Program", "Machine Down", "Fill Chemical", "Fine-tune Program", "System Chemical Leak", "Chemical Over Flow"],
-    "KED Cleaning PCB": ["Covert Program", "Machine Down", "Fill Chemical", "Fine-tune Program", "System Chemical Leak", "Chemical Over Flow"],
-    "DCT Cleaning PCB": ["Covert Program", "Machine Down", "Fill Chemical", "Fine-tune Program", "System Chemical Leak", "Chemical Over Flow"],
-}
-
-EXTRA_LINE_OPS = ["PACKING", "REWORK", "CLEANING"]
-
-MACHINE_TYPE_MAP_DEFAULT = {
-    "Wave Soldering": ["ECO1 SELECT", "ERSA VERSAFLOW"],
-    "AOI Wave": ["Jet", "Nordson", "Axxon", "Yamaha"],
-    "AOI Coating": ["Jet", "Nordson", "Axxon", "Yamaha"],
-    "X-ray": ["Vitrox", "Omron"],
-    "RTV": ["Mycronic", "Nordson"],
-    "Coating": ["Mycronic", "Nordson"],
-    "UV Curing": ["Nutek", "Nordson"],
-    "Robotic": ["Robot KUKA"],
-    "Auto Insertion": ["FACC"],
-    "Router": ["Aurotek Router", "Cencorp Router"],
-    "Cleaning Machine": ["DCT Twin", "KED D1000", "KED AT5000"],
-    "Rework Machine": ["SRT Machine", "Minipot", "Oven"],
-    "Etc..": ["Other M/C or Tools"],
-}
-
-DEFAULT_SUPPORT_AREAS = ["Backline", "Inspection", "Coating & Robotic", "Rework", "Etc.."]
-DEFAULT_SUPPORT_AREA_MAP = {
-    "Backline": ["Wave Soldering", "Auto Insertion", "Router", "Cleaning Machine"],
-    "Inspection": ["AOI Wave", "AOI Coating", "X-ray"],
-    "Coating & Robotic": ["RTV", "Coating", "UV Curing", "Robotic"],
-    "Rework": ["Rework Machine"],
-    "Etc..": ["Etc.."],
-}
-LINE_MACHINE_MAP_SETTING_KEY = "line_machine_map_v1"
-LEGACY_LINE_MACHINE_MAP_FILE = "database/monitoring_line_map.json"
-LINE_MACHINE_MAP_FILE_ENV = "SUPPORTHUB_LINE_MACHINE_MAP_FILE"
-LINE_MACHINE_ITEM_SEPARATOR = "|||"
-
-MASTER_STATUS_TEXT = {
-    "line_added": "Added new Line No. successfully",
-    "line_exists": "Line No. already exists",
-    "line_deleted": "Deleted Line No. successfully",
-    "line_not_found": "Line No. not found",
-    "machine_added": "Added new Machine successfully",
-    "machine_exists": "Machine already exists",
-    "machine_deleted": "Deleted Machine successfully",
-    "machine_not_found": "Machine not found",
-    "machine_type_added": "Added new Machine Type successfully",
-    "machine_type_exists": "Machine Type already exists for this Machine",
-    "machine_type_deleted": "Deleted Machine Type successfully",
-    "machine_type_not_found": "Machine Type not found",
-    "machine_id_added": "Added new Machine ID successfully",
-    "machine_id_exists": "Machine ID already exists for this Machine Type",
-    "machine_id_deleted": "Deleted Machine ID successfully",
-    "machine_id_not_found": "Machine ID not found",
-    "support_area_added": "Added new Support Area successfully",
-    "support_area_exists": "Support Area already exists",
-    "support_area_deleted": "Deleted Support Area successfully",
-    "support_area_not_found": "Support Area not found",
-    "support_area_map_added": "Mapped Support Area to Machine successfully",
-    "support_area_map_exists": "This Support Area and Machine mapping already exists",
-    "support_area_map_deleted": "Deleted Support Area and Machine mapping successfully",
-    "support_area_map_not_found": "Support Area and Machine mapping not found",
-    "problem_added": "Added new Problem successfully",
-    "problem_exists": "Problem already exists",
-    "problem_deleted": "Deleted Problem successfully",
-    "problem_not_found": "Problem not found",
-    "line_machine_map_added": "Mapped Line No. to Monitoring item successfully",
-    "line_machine_map_exists": "This Line No. and Monitoring item mapping already exists",
-    "line_machine_map_deleted": "Deleted Line No. and Monitoring item mapping successfully",
-    "line_machine_map_not_found": "Line No. and Monitoring item mapping not found",
-    "invalid_input": "Please provide all required fields",
-}
-
 def _clean_text(v: Optional[str]) -> str:
     return (v or "").strip()
 
@@ -195,8 +121,6 @@ def _append_unique_casefold(values: List[str], value: str) -> None:
     lowered = value.lower()
     if lowered not in {item.lower() for item in values}:
         values.append(value)
-
-MASTER_SEED_KEY = "master_seed_v1"
 
 def _ensure_master_seeded():
     try:
@@ -829,7 +753,6 @@ register_web_routes(
         "read_session_token": read_session_token,
         "sha256": sha256,
         "verify_password": verify_password,
-        "line_notify": line_notify,
         "parse_th_date_range": parse_th_date_range,
         "build_monitoring_metrics": build_monitoring_metrics,
         "build_monitoring_line_metrics": build_monitoring_line_metrics,
