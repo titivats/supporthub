@@ -133,16 +133,16 @@ if errorlevel 1 (
   goto :END
 )
 
-if not exist "%PROJ%\python\server_app.py" (
-  echo [ERROR] python\server_app.py not found in %PROJ%
-  echo [ERROR] python\server_app.py not found in %PROJ% >> "%LOGFILE%"
+if not exist "%PROJ%\python\app.py" (
+  echo [ERROR] python\app.py not found in %PROJ%
+  echo [ERROR] python\app.py not found in %PROJ% >> "%LOGFILE%"
   goto :END
 )
 
 echo.
 echo [RUN] Uvicorn starting at http://%HOST%:%PORT% ...
-echo [RUN] uvicorn python.server_app:app --host %HOST% --port %PORT% >> "%LOGFILE%"
-python -m uvicorn python.server_app:app --host %HOST% --port %PORT% >> "%LOGFILE%" 2>&1
+echo [RUN] uvicorn python.app:app --host %HOST% --port %PORT% >> "%LOGFILE%"
+python -m uvicorn python.app:app --host %HOST% --port %PORT% >> "%LOGFILE%" 2>&1
 set "RC=%ERRORLEVEL%"
 echo [INFO] Uvicorn exited with code %RC% >> "%LOGFILE%"
 
