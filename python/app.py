@@ -1,11 +1,12 @@
-﻿from typing import Dict, List, Optional, Set
+﻿from time import perf_counter
+from typing import Dict, List, Optional, Set
 import json
 import os
 import re
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from sqlalchemy.orm import Session
 
@@ -61,6 +62,15 @@ from python.monitor.monitor_service import (
 from python.time_utils import TH_OFFSET, fmt_hms as _fmt_hms, fmt_th
 
 from python.iot_monitor.iot_monitor_service import iot_monitor
+from python.logging_utils import (
+    configure_daily_app_logging,
+    get_supporthub_logger,
+    should_skip_request_logging,
+)
+
+configure_daily_app_logging()
+APP_LOGGER = get_supporthub_logger("app")
+REQUEST_LOGGER = get_supporthub_logger("request")
 
 app = FastAPI(title="SupportHub")
 from fastapi.templating import Jinja2Templates
@@ -70,14 +80,17 @@ templates = Jinja2Templates(directory="html")
 @app.on_event("startup")
 def on_startup() -> None:
     iot_monitor.start()
+    APP_LOGGER.info("Application startup complete")
 
 
 @app.on_event("shutdown")
 def on_shutdown() -> None:
     iot_monitor.stop()
+    APP_LOGGER.info("Application shutdown complete")
 
 # ---------- Database ----------
 init_db()
+APP_LOGGER.info("Database initialization complete")
 
 # ---------- Realtime version (smart-reload) ----------
 ACTIVE_VERSION = 0
@@ -96,6 +109,41 @@ def current_active_version():
 def api_active_version():
     # Used by index.html polling script for lightweight active-ticket refresh.
     return {"version": current_active_version()}
+
+
+@app.middleware("http")
+async def log_http_requests(request: Request, call_next):
+    started = perf_counter()
+    path = request.url.path or "/"
+    query = request.url.query or ""
+    full_path = f"{path}?{query}" if query else path
+    client_ip = request.client.host if request.client else "-"
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        elapsed_ms = (perf_counter() - started) * 1000.0
+        if not should_skip_request_logging(path):
+            REQUEST_LOGGER.exception(
+                "%s %s -> 500 | %.2f ms | ip=%s",
+                request.method,
+                full_path,
+                elapsed_ms,
+                client_ip,
+            )
+        raise
+
+    elapsed_ms = (perf_counter() - started) * 1000.0
+    if not should_skip_request_logging(path):
+        REQUEST_LOGGER.info(
+            "%s %s -> %s | %.2f ms | ip=%s",
+            request.method,
+            full_path,
+            response.status_code,
+            elapsed_ms,
+            client_ip,
+        )
+    return response
 
 def _clean_text(v: Optional[str]) -> str:
     return (v or "").strip()
@@ -242,7 +290,7 @@ def _ensure_master_seeded():
             db.add(seed_row)
         db.commit()
     except Exception as e:
-        print("[INIT] _ensure_master_seeded error:", e)
+        APP_LOGGER.exception("[INIT] _ensure_master_seeded error: %s", e)
     finally:
         try:
             db.close()
@@ -253,6 +301,7 @@ def _is_admin_user(user: User) -> bool:
     return (user.role or "").lower() == "admin" or (user.username or "").upper() == "ADMIN"
 
 _ensure_master_seeded()
+APP_LOGGER.info("Master data seed check complete")
 
 def _normalize_line_machine_map(raw: object) -> Dict[str, List[str]]:
     out: Dict[str, List[str]] = {}
@@ -772,3 +821,6 @@ register_web_routes(
         "iot_monitor": iot_monitor,
     },
 )
+
+
+

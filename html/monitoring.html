@@ -151,16 +151,16 @@
 
     .donut-wrap{display:flex;justify-content:center;align-items:center;padding:8px 0 10px}
     .donut{
-      --oee: 0;
+      --availability: 0;
       width:238px;
       height:238px;
       border-radius:50%;
-      background:conic-gradient(var(--good) calc(var(--oee) * 1%), #e2e8f0 0);
+      background:conic-gradient(var(--good) calc(var(--availability) * 1%), #e2e8f0 0);
       display:grid;
       place-items:center;
     }
-    .donut.warn{background:conic-gradient(var(--warn) calc(var(--oee) * 1%), #e2e8f0 0)}
-    .donut.bad{background:conic-gradient(var(--bad) calc(var(--oee) * 1%), #e2e8f0 0)}
+    .donut.warn{background:conic-gradient(var(--warn) calc(var(--availability) * 1%), #e2e8f0 0)}
+    .donut.bad{background:conic-gradient(var(--bad) calc(var(--availability) * 1%), #e2e8f0 0)}
     .donut::before{
       content:"";
       width:76%;
@@ -174,11 +174,11 @@
     .donut-val{font-size:44px;font-weight:700;line-height:1}
     .donut-sub{font-size:17px;color:#475569}
 
-    .oee-row{display:flex;justify-content:space-between;color:#475569;font-size:14px;margin-top:6px}
-    .oee-track{height:14px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin:8px 0 6px}
-    .oee-fill{height:100%;background:#16a34a}
-    .oee-fill.warn{background:#f59e0b}
-    .oee-fill.bad{background:#ef4444}
+    .availability-row{display:flex;justify-content:space-between;color:#475569;font-size:14px;margin-top:6px}
+    .availability-track{height:14px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin:8px 0 6px}
+    .availability-fill{height:100%;background:#16a34a}
+    .availability-fill.warn{background:#f59e0b}
+    .availability-fill.bad{background:#ef4444}
     .formula{margin-top:6px;color:#334155;font-size:14px;line-height:1.35}
 
     .badge{
@@ -349,7 +349,7 @@
     <div class="topbar">
       <div>
         <h1>Monitoring</h1>
-        <p class="desc">Metrics are calculated from filtered history tickets (DONE + CANCELLED) where Problem Match Class = {{ downtime_class_name or 'Machine Downtime' }}.</p>
+        <p class="desc">Metrics are calculated from filtered history tickets (DONE + CANCELLED) where Problem Match Class = {{ downtime_class_name or 'Machine Downtime' }}. Planned production time = 21.5 hours/day.</p>
       </div>
       <div class="actions">
         <button class="btn" type="button" onclick="goBack()">Back</button>
@@ -359,7 +359,7 @@
   </div>
 
   <form class="card filter-card" method="get" action="/monitoring">
-    <p class="filter-title">Filter Criteria (OEE + Key Metrics)</p>
+    <p class="filter-title">Filter Criteria (Availability + Key Metrics)</p>
     <input type="hidden" name="line_support_area" value="{{ line_support_area or '' }}">
     <input type="hidden" name="line_start_date" value="{{ line_start_date or '' }}">
     <input type="hidden" name="line_end_date" value="{{ line_end_date or '' }}">
@@ -375,7 +375,7 @@
       </label>
 
       <label>Machine
-        <select id="oeeMachineTypeSelect" name="machine_type">
+        <select id="availabilityMachineTypeSelect" name="machine_type">
           <option value="">All</option>
           {% for mt in machine_type_map.keys()|list|sort %}
             <option value="{{ mt }}" {% if machine_type == mt %}selected{% endif %}>{{ mt }}</option>
@@ -384,7 +384,7 @@
       </label>
 
       <label>Machine Type
-        <select id="oeeMachineBrandSelect" name="machine_brand" data-selected="{{ machine_brand }}">
+        <select id="availabilityMachineBrandSelect" name="machine_brand" data-selected="{{ machine_brand }}">
           <option value="">All</option>
         </select>
       </label>
@@ -400,39 +400,39 @@
       </label>
 
       <button class="btn primary" type="submit" name="apply" value="1">Apply Filter</button>
-      <button class="btn" type="submit" name="clear_oee" value="1">Clear</button>
+      <button class="btn" type="submit" name="clear_availability" value="1">Clear</button>
     </div>
   </form>
 
   {% if applied and metrics %}
-  {% set tone = 'good' if metrics.is_on_target else ('warn' if metrics.oee_percent >= 50 else 'bad') %}
+  {% set tone = 'good' if metrics.is_on_target else ('warn' if metrics.availability_percent >= 50 else 'bad') %}
   <div class="layout">
     <section class="panel">
       <div class="panel-head">
-        <h2>OEE</h2>
+        <h2>Availability</h2>
         <span class="badge {{ 'good' if metrics.is_on_target else 'warn' }}">
           {{ 'Above Target' if metrics.is_on_target else 'Below Target' }}
         </span>
       </div>
 
       <div class="donut-wrap">
-        <div class="donut {{ tone }}" style="--oee: {{ metrics.oee_percent }};">
+        <div class="donut {{ tone }}" style="--availability: {{ metrics.availability_percent }};">
           <div class="donut-text">
-            <div class="donut-val">{{ '%.2f'|format(metrics.oee_percent) }}%</div>
-            <div class="donut-sub">OEE</div>
+            <div class="donut-val">{{ '%.2f'|format(metrics.availability_percent) }}%</div>
+            <div class="donut-sub">Availability</div>
           </div>
         </div>
       </div>
 
-      <div class="oee-row">
-        <span>Target > {{ '%.1f'|format(metrics.target_percent) }}%</span>
-        <span>Current {{ '%.2f'|format(metrics.oee_percent) }}%</span>
+      <div class="availability-row">
+        <span>Availability Target &gt; {{ '%.1f'|format(metrics.target_percent) }}%</span>
+        <span>Current Availability {{ '%.2f'|format(metrics.availability_percent) }}%</span>
       </div>
-      <div class="oee-track">
-        <div class="oee-fill {{ tone }}" style="width: {{ metrics.oee_percent if metrics.oee_percent <= 100 else 100 }}%;"></div>
+      <div class="availability-track">
+        <div class="availability-fill {{ tone }}" style="width: {{ metrics.availability_percent if metrics.availability_percent <= 100 else 100 }}%;"></div>
       </div>
       <div class="formula">
-        Formula used here is availability-based OEE: <strong>Uptime / (Uptime + Downtime)</strong>.
+        Formula used here is <strong>Availability = Uptime / Planned Production Time</strong>, where <strong>Uptime = Planned Production Time - Downtime</strong>.
       </div>
     </section>
 
@@ -442,22 +442,22 @@
         <div class="metric">
           <div class="k">Downtime</div>
           <div class="v">{{ metrics.downtime_hms }}</div>
-          <div class="d">Sum of Downtime column from History (all problems, not only Machine Down)</div>
+          <div class="d">Sum of closed_at - created_at for Problem Match Class = {{ downtime_class_name or 'Machine Downtime' }}</div>
         </div>
         <div class="metric">
           <div class="k">MTTR</div>
           <div class="v">{{ metrics.mttr_hms }}</div>
-          <div class="d">Total Doing / number of downtime incidents</div>
+          <div class="d">Total doing time / number of downtime incidents</div>
         </div>
         <div class="metric">
           <div class="k">MTBF</div>
           <div class="v">{{ metrics.mtbf_hms }}</div>
-          <div class="d">21 hours / number of downtime incidents</div>
+          <div class="d">Uptime / number of downtime incidents</div>
         </div>
         <div class="metric">
           <div class="k">Uptime</div>
           <div class="v">{{ metrics.uptime_hms }}</div>
-          <div class="d">Monitored time - downtime</div>
+          <div class="d">Planned production time - downtime</div>
         </div>
       </div>
 
@@ -466,7 +466,9 @@
         <div class="k">DONE / CANCELLED</div><div class="v">{{ metrics.done_count }} / {{ metrics.cancelled_count }}</div>
         <div class="k">Incidents Used</div><div class="v">{{ metrics.incident_count }}</div>
         <div class="k">Total Doing</div><div class="v">{{ metrics.total_doing_hms }}</div>
-        <div class="k">Monitored Time</div><div class="v">{{ metrics.monitored_hms }}</div>
+        <div class="k">Planned Production Time</div><div class="v">{{ metrics.planned_hms or metrics.monitored_hms }}</div>
+        <div class="k">Planned Days</div><div class="v">{{ metrics.planned_days or 0 }}</div>
+        <div class="k">Planned Hours / Day</div><div class="v">{{ metrics.planned_hours_per_day or 21.5 }}</div>
         <div class="k">Start (TH)</div><div class="v">{{ metrics.start_th or '-' }}</div>
         <div class="k">End (TH)</div><div class="v">{{ metrics.end_th or '-' }}</div>
       </div>
@@ -482,7 +484,7 @@
       </div>
       <div class="metric-switch" id="metricSwitch">
         <button class="btn metric-btn active" type="button" data-metric="downtime_percent">%Downtime</button>
-        <button class="btn metric-btn" type="button" data-metric="oee_percent">OEE</button>
+        <button class="btn metric-btn" type="button" data-metric="availability_percent">Availability</button>
         <button class="btn metric-btn" type="button" data-metric="mtbf_hours">MTBF</button>
         <button class="btn metric-btn" type="button" data-metric="mttr_hours">MTTR</button>
       </div>
@@ -537,8 +539,8 @@
 <script id="lineAppliedData" type="application/json">{{ line_applied | tojson }}</script>
 <script>
   const machineTypeMap = {{ machine_type_map | tojson }};
-  const oeeTypeSelect = document.getElementById("oeeMachineTypeSelect");
-  const oeeBrandSelect = document.getElementById("oeeMachineBrandSelect");
+  const availabilityTypeSelect = document.getElementById("availabilityMachineTypeSelect");
+  const availabilityBrandSelect = document.getElementById("availabilityMachineBrandSelect");
   const lineMetricsNode = document.getElementById("lineMetricsData");
   const lineAppliedNode = document.getElementById("lineAppliedData");
   const lineBarChart = document.getElementById("lineBarChart");
@@ -591,7 +593,7 @@
     typeSelect.addEventListener("change", () => fillBrands(typeSelect, brandSelect, ""));
   }
 
-  bindMachineBrandFilter(oeeTypeSelect, oeeBrandSelect);
+  bindMachineBrandFilter(availabilityTypeSelect, availabilityBrandSelect);
 
   function escapeSvg(value){
     return String(value ?? "")
@@ -624,10 +626,10 @@
       target: 1,
       targetLabel: "Target < 1%",
     },
-    oee_percent: {
-      key: "oee_percent",
-      axis: "Y-axis = OEE (%), Y2-axis = Hours, X-axis = Line No. | Machine | Machine ID",
-      yAxisLabel: "OEE (%)",
+    availability_percent: {
+      key: "availability_percent",
+      axis: "Y-axis = Availability (%), Y2-axis = Hours, X-axis = Line No. | Machine | Machine ID",
+      yAxisLabel: "Availability (%)",
       format: (v) => `${v.toFixed(2)}%`,
       tickFormat: (v) => `${v.toFixed(0)}%`,
       hoursKey: "uptime_hours",
@@ -885,7 +887,7 @@
     if (Math.abs(yMax - valueMax) < 1e-9) yMax += step;
     const tickCount = Math.max(3, Math.round(yMax / step));
 
-    const pad = { top: 28, right: 90, bottom: showMachineInfoLabels ? 194 : (hasBreakdown ? 178 : 128), left: 76 };
+    const pad = { top: 28, right: 90, bottom: showMachineInfoLabels ? 176 : (hasBreakdown ? 178 : 128), left: 76 };
     const stageWidth = (lineBarChart?.clientWidth || lineBarChart?.offsetWidth || 0);
     const usableStageWidth = Math.max(260, stageWidth - 16);
     const width = stageWidth > 0 ? usableStageWidth : 940;
@@ -893,6 +895,7 @@
     const plotWidth = width - pad.left - pad.right;
     const plotHeight = height - pad.top - pad.bottom;
     const plotBottom = pad.top + plotHeight;
+    const itemLabelY = plotBottom + 14;
 
     const yFromValue = (v) => pad.top + plotHeight - (Math.max(v, 0) / yMax) * plotHeight;
     const slotWidth = plotWidth / groups.length;
@@ -951,7 +954,7 @@
             <title>${escapeSvg(lineDisplay)} / ${escapeSvg(itemLabelRaw)}: ${escapeSvg(valueText)}</title>
             <rect x="${x}" y="${adjustedY}" width="${barWidth}" height="${adjustedHeight}" rx="6" fill="${fillColor}"></rect>
             <text x="${x + barWidth / 2}" y="${Math.max(adjustedY - 6, pad.top + 12)}" text-anchor="middle" font-size="12" font-weight="600" fill="${chartPalette.valueText}">${escapeSvg(valueText)}</text>
-            ${showItemLabel ? `<text x="${x + barWidth / 2}" y="${plotBottom + 24}" text-anchor="end" transform="rotate(-45 ${x + barWidth / 2} ${plotBottom + 24})" font-size="11" font-weight="600" fill="${chartPalette.itemText}">${escapeSvg(itemLabel)}</text>` : ""}
+            ${showItemLabel ? `<text x="${x + barWidth / 2}" y="${itemLabelY}" text-anchor="end" transform="rotate(-45 ${x + barWidth / 2} ${itemLabelY})" font-size="11" font-weight="600" fill="${chartPalette.itemText}">${escapeSvg(itemLabel)}</text>` : ""}
           </g>
         `;
       }).join("");
@@ -972,7 +975,6 @@
         ${barParts}
         <line x1="${pad.left}" y1="${targetY}" x2="${pad.left + plotWidth}" y2="${targetY}" stroke="${chartPalette.targetLine}" stroke-width="2.6" stroke-dasharray="7 5" stroke-linecap="round"></line>
         <text x="${pad.left + plotWidth - 4}" y="${Math.max(targetY - 8, pad.top + 12)}" text-anchor="end" font-size="12" font-weight="700" fill="${chartPalette.targetText}">${escapeSvg(cfg.targetLabel)}</text>
-        <text x="${pad.left + plotWidth / 2}" y="${height - 16}" text-anchor="middle" font-size="13" font-weight="700" fill="${chartPalette.itemText}">Line No. | Machine | Machine ID</text>
         <text x="22" y="${pad.top + plotHeight / 2}" text-anchor="middle" transform="rotate(-90 22 ${pad.top + plotHeight / 2})" font-size="13" font-weight="700" fill="${chartPalette.itemText}">${escapeSvg(cfg.yAxisLabel)}</text>
         <text x="${width - 22}" y="${pad.top + plotHeight / 2}" text-anchor="middle" transform="rotate(90 ${width - 22} ${pad.top + plotHeight / 2})" font-size="13" font-weight="700" fill="${chartPalette.itemText}">${escapeSvg(cfg.rightAxisLabel || "Hours")}</text>
       </svg>

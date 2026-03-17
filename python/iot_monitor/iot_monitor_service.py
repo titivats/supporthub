@@ -58,6 +58,75 @@ def _normalize_metric_key(value: str) -> str:
     return "".join(ch for ch in (value or "").lower() if ch.isalnum())
 
 
+_METRIC_ALIASES = {
+    "voltage": ("voltage", "volt", "volts", "v"),
+    "current": ("current", "ampere", "amperes", "amps", "amp", "a"),
+    "power": ("power", "watt", "watts", "w"),
+    "power_factor": ("powerfactor", "power_factor", "pf"),
+    "energy": ("energy", "kwh", "wh"),
+    "frequency": ("frequency", "freq", "hz", "f"),
+}
+
+
+def _canonical_metric_name(value: str) -> str | None:
+    normalized = _normalize_metric_key(value)
+    if not normalized:
+        return None
+
+    exact_alias_map = {}
+    for canonical, aliases in _METRIC_ALIASES.items():
+        normalized_aliases = {_normalize_metric_key(alias) for alias in aliases if alias}
+        for alias in normalized_aliases:
+            exact_alias_map[alias] = canonical
+
+    exact_match = exact_alias_map.get(normalized)
+    if exact_match:
+        return exact_match
+
+    for canonical, aliases in _METRIC_ALIASES.items():
+        normalized_aliases = {_normalize_metric_key(alias) for alias in aliases if alias}
+        for alias in sorted(normalized_aliases, key=len, reverse=True):
+            if normalized.endswith(alias) or normalized.startswith(alias):
+                return canonical
+    return None
+
+
+def _canonicalize_numeric_key(raw_key: str) -> str:
+    key = (raw_key or "").strip()
+    if not key:
+        return key
+
+    if "." in key:
+        prefix, suffix = key.rsplit(".", 1)
+    else:
+        prefix, suffix = "", key
+
+    canonical_suffix = _canonical_metric_name(suffix) or _canonical_metric_name(key)
+    if not canonical_suffix:
+        return key
+    return f"{prefix}.{canonical_suffix}" if prefix else canonical_suffix
+
+
+def _canonicalize_numeric_map(numeric_map: Dict[str, float]) -> Dict[str, float]:
+    if not numeric_map:
+        return {}
+
+    out: Dict[str, float] = {}
+    for key, value in numeric_map.items():
+        canonical_key = _canonicalize_numeric_key(key)
+        current_value = out.get(canonical_key)
+        numeric_value = float(value)
+
+        if current_value is None:
+            out[canonical_key] = numeric_value
+            continue
+
+        # Prefer non-zero values when multiple aliases point to the same metric.
+        if float(current_value) == 0.0 and numeric_value != 0.0:
+            out[canonical_key] = numeric_value
+    return out
+
+
 def _pick_metric_value(numeric_map: Dict[str, float], aliases: tuple[str, ...]) -> float | None:
     if not numeric_map:
         return None
@@ -88,7 +157,7 @@ class IoTMonitorService:
     def __init__(self) -> None:
         self.host = os.getenv("SUPPORTHUB_MQTT_HOST", "10.206.9.201").strip() or "10.206.9.201"
         self.port = int(os.getenv("SUPPORTHUB_MQTT_PORT", "1883"))
-        self.topic = os.getenv("SUPPORTHUB_MQTT_TOPIC", "power/pzem").strip() or "power/pzem1"
+        self.topic = os.getenv("SUPPORTHUB_MQTT_TOPIC", "power/pzem").strip() or "power/pzem"
         self.client_id = os.getenv("SUPPORTHUB_MQTT_CLIENT_ID", "SUPPORTHUB-IOT-MONITOR").strip() or "SUPPORTHUB-IOT-MONITOR"
         self.sample_limit = int(os.getenv("SUPPORTHUB_IOT_SAMPLE_LIMIT", "180"))
 
@@ -130,12 +199,12 @@ class IoTMonitorService:
             "broker": f"{self.host}:{self.port}",
             "topic": self.topic,
             "mqtt_client": self.client_id,
-            "voltage": _pick_metric_value(numeric_map, ("voltage", "volt")),
-            "current": _pick_metric_value(numeric_map, ("current", "ampere", "amps")),
-            "power": _pick_metric_value(numeric_map, ("power", "watt")),
-            "power_factor": _pick_metric_value(numeric_map, ("powerfactor", "pf")),
+            "voltage": _pick_metric_value(numeric_map, ("voltage", "volt", "volts", "v")),
+            "current": _pick_metric_value(numeric_map, ("current", "ampere", "amperes", "amps", "amp", "a")),
+            "power": _pick_metric_value(numeric_map, ("power", "watt", "watts", "w")),
+            "power_factor": _pick_metric_value(numeric_map, ("powerfactor", "power_factor", "pf")),
             "energy": _pick_metric_value(numeric_map, ("energy", "kwh", "wh")),
-            "frequency": _pick_metric_value(numeric_map, ("frequency", "freq", "hz")),
+            "frequency": _pick_metric_value(numeric_map, ("frequency", "freq", "hz", "f")),
             "raw_payload": payload or None,
         }
 
@@ -387,6 +456,8 @@ class IoTMonitorService:
                         numeric_map = {"value": num}
             except Exception:
                 numeric_map = {}
+
+        numeric_map = _canonicalize_numeric_map(numeric_map)
 
         status_row: Dict[str, Any]
         measurement_row: Dict[str, Any]

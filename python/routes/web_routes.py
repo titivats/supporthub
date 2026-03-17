@@ -20,6 +20,7 @@ from python.routes.helpers import (
     normalize_history_filters,
     normalize_line_monitoring_item,
     normalize_role,
+    parse_ticket_machine_and_brand,
     prune_line_machine_map,
     redirect_admin_machines,
     split_line_monitoring_item,
@@ -314,4 +315,7 @@ def register_web_routes(app, templates, deps):
     register_problem_match_routes(app, templates, route_ctx)
     register_ticket_action_routes(app, templates, route_ctx)
     register_history_monitoring_iot_routes(app, templates, route_ctx)
+
+
+
 

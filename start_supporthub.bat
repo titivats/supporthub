@@ -7,7 +7,7 @@ rem    - Installs strictly from local wheels: E:\Data\Web\supporthub\wheels
 rem    - Creates/activates venv
 rem    - Runs Uvicorn in foreground
 rem    - Always PAUSE at the end (window won't auto-close)
-rem    - Writes simple rolling log to logs\start_supporthub.log
+rem    - Writes daily launcher log to logs\launcher_YYYY-MM-DD.log
 rem =====================================================================
 
 set "PROJ=E:\Data\Web\supporthub"
@@ -17,10 +17,18 @@ set "VENV=%PROJ%\venv"
 set "HOST=127.0.0.1"
 set "PORT=8888"
 set "LOGDIR=%PROJ%\logs"
-set "LOGFILE=%LOGDIR%\start_supporthub.log"
+set "LOGDATE="
+set "LOGFILE="
 set "WEB_CONFIG=%PROJ%\web.config"
 
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
+
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Date -Format 'yyyy-MM-dd'"`) do (
+  set "LOGDATE=%%A"
+)
+if not defined LOGDATE set "LOGDATE=%DATE%"
+set "LOGFILE=%LOGDIR%\launcher_%LOGDATE%.log"
+set "SUPPORTHUB_LOG_DIR=%LOGDIR%"
 
 echo.>> "%LOGFILE%"
 echo ================== %DATE% %TIME% ================== >> "%LOGFILE%"
@@ -37,6 +45,11 @@ if not defined SUPPORTHUB_DATABASE_URL (
     )
   )
 )
+
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_MQTT_HOST
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_MQTT_PORT
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_MQTT_TOPIC
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_MQTT_CLIENT_ID
 
 if not defined SUPPORTHUB_DATABASE_URL (
   echo [ERROR] SUPPORTHUB_DATABASE_URL was not found.
@@ -76,6 +89,7 @@ echo Venv    : %VENV%
 echo Req     : %REQ%
 echo Host:Port -> %HOST%:%PORT%
 echo Database: %DB_MODE%
+if defined SUPPORTHUB_MQTT_HOST echo MQTT    : %SUPPORTHUB_MQTT_HOST%:%SUPPORTHUB_MQTT_PORT% Topic=%SUPPORTHUB_MQTT_TOPIC%
 echo.
 
 if not exist "%PROJ%" (
@@ -141,8 +155,8 @@ if not exist "%PROJ%\python\app.py" (
 
 echo.
 echo [RUN] Uvicorn starting at http://%HOST%:%PORT% ...
-echo [RUN] uvicorn python.app:app --host %HOST% --port %PORT% >> "%LOGFILE%"
-python -m uvicorn python.app:app --host %HOST% --port %PORT% >> "%LOGFILE%" 2>&1
+echo [RUN] uvicorn python.app:app --host %HOST% --port %PORT% --no-access-log >> "%LOGFILE%"
+python -m uvicorn python.app:app --host %HOST% --port %PORT% --no-access-log >> "%LOGFILE%" 2>&1
 set "RC=%ERRORLEVEL%"
 echo [INFO] Uvicorn exited with code %RC% >> "%LOGFILE%"
 
@@ -159,3 +173,12 @@ echo.
 echo (Window will stay open) Press any key to close...
 pause >nul
 endlocal
+goto :EOF
+
+:LOAD_OPTIONAL_SETTING
+if defined %~1 goto :EOF
+if not exist "%WEB_CONFIG%" goto :EOF
+for /f "usebackq delims=" %%A in (`powershell -NoProfile -ExecutionPolicy Bypass -Command "$cfg=[xml](Get-Content -Raw '%WEB_CONFIG%'); $n=$cfg.SelectSingleNode('/configuration/appSettings/add[@key=''%~1'']'); if($n -and $n.value){$n.value}"`) do (
+  set "%~1=%%A"
+)
+goto :EOF

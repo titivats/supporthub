@@ -428,12 +428,13 @@
     power:     { label: "Power",        unit: "W",  color: "#f59e0b" },
     energy:    { label: "Energy",       unit: "kWh",color: "#10b981" },
     frequency: { label: "Frequency",    unit: "Hz", color: "#8b5cf6" },
+    power_factor: { label: "Power Factor", unit: "", color: "#6366f1" },
     pf:        { label: "Power Factor", unit: "",   color: "#6366f1" },
     freq:      { label: "Frequency",    unit: "Hz", color: "#8b5cf6" }
   };
   const SENSOR_COLORS = ["#3b82f6","#8b5cf6","#10b981","#f59e0b","#ef4444","#6366f1"];
   const SENSOR_BG_CLASS = ["s0","s1","s2","s3","s4","s5"];
-  const METRIC_ORDER = ["voltage","current","power","energy","frequency","freq","pf"];
+  const METRIC_ORDER = ["voltage","current","power","energy","frequency","power_factor","freq","pf"];
 
   function goBack(){ window.location.href = "/"; }
 
