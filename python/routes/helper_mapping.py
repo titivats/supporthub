@@ -311,8 +311,14 @@ def redirect_admin_machines(status_key: str) -> RedirectResponse:
     return RedirectResponse(f"/admin/machines?status={status_key}", status_code=303)
 
 
-def commit_master_change(db: Session, bump_active_version: Callable[[], None]) -> None:
+def commit_master_change(
+    db: Session,
+    bump_active_version: Callable[[], None],
+    bump_master_data_version: Optional[Callable[[], None]] = None,
+) -> None:
     db.commit()
+    if bump_master_data_version is not None:
+        bump_master_data_version()
     bump_active_version()
 
 

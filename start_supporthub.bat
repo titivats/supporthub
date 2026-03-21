@@ -14,6 +14,7 @@ set "PROJ=E:\Data\Web\supporthub"
 set "REQ=%PROJ%\requirements.txt"
 set "WHEELS=E:\Data\Web\supporthub\wheels"
 set "VENV=%PROJ%\venv"
+set "PYTHON_EXE=%VENV%\Scripts\python.exe"
 set "HOST=127.0.0.1"
 set "PORT=8888"
 set "LOGDIR=%PROJ%\logs"
@@ -50,6 +51,21 @@ call :LOAD_OPTIONAL_SETTING SUPPORTHUB_MQTT_HOST
 call :LOAD_OPTIONAL_SETTING SUPPORTHUB_MQTT_PORT
 call :LOAD_OPTIONAL_SETTING SUPPORTHUB_MQTT_TOPIC
 call :LOAD_OPTIONAL_SETTING SUPPORTHUB_MQTT_CLIENT_ID
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_SECRET
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_SECRET_FILE
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_INSTALL_ON_START
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_AUTO_RESTART
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_RESTART_DELAY_SECONDS
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_DB_POOL_SIZE
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_DB_MAX_OVERFLOW
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_DB_POOL_TIMEOUT
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_DB_POOL_RECYCLE
+call :LOAD_OPTIONAL_SETTING SUPPORTHUB_RUN_DB_MAINTENANCE_ON_STARTUP
+
+if not defined SUPPORTHUB_SECRET_FILE set "SUPPORTHUB_SECRET_FILE=%PROJ%\secret_key"
+if not defined SUPPORTHUB_INSTALL_ON_START set "SUPPORTHUB_INSTALL_ON_START=false"
+if not defined SUPPORTHUB_AUTO_RESTART set "SUPPORTHUB_AUTO_RESTART=true"
+if not defined SUPPORTHUB_RESTART_DELAY_SECONDS set "SUPPORTHUB_RESTART_DELAY_SECONDS=5"
 
 if not defined SUPPORTHUB_DATABASE_URL (
   echo [ERROR] SUPPORTHUB_DATABASE_URL was not found.
@@ -108,6 +124,13 @@ if not exist "%WHEELS%" (
   goto :END
 )
 
+cd /d "%PROJ%"
+if errorlevel 1 (
+  echo [ERROR] Failed to change working directory to %PROJ%
+  echo [ERROR] Failed to change working directory to %PROJ% >> "%LOGFILE%"
+  goto :END
+)
+
 if not exist "%VENV%" (
   echo [INFO] Creating virtual environment...
   echo [INFO] Creating virtual environment... >> "%LOGFILE%"
@@ -128,22 +151,36 @@ if errorlevel 1 (
   goto :END
 )
 
-echo.
-echo [INSTALL] Offline install from wheels ...
-echo [INSTALL] pip install --no-index --find-links "%WHEELS%" -r "%REQ%"
-echo [INSTALL] Offline install from wheels ... >> "%LOGFILE%"
-python -m pip install --no-index --find-links "%WHEELS%" -r "%REQ%" >> "%LOGFILE%" 2>&1
-if errorlevel 1 (
-  echo [WARN] Some packages may have failed to install. See log:
-  echo        %LOGFILE%
-  echo [WARN] pip install returned non-zero. >> "%LOGFILE%"
+set "NEED_INSTALL=0"
+if /I "%SUPPORTHUB_INSTALL_ON_START%"=="1" set "NEED_INSTALL=1"
+if /I "%SUPPORTHUB_INSTALL_ON_START%"=="true" set "NEED_INSTALL=1"
+if /I "%SUPPORTHUB_INSTALL_ON_START%"=="yes" set "NEED_INSTALL=1"
+if /I "%SUPPORTHUB_INSTALL_ON_START%"=="on" set "NEED_INSTALL=1"
+
+if "%NEED_INSTALL%"=="0" (
+  "%PYTHON_EXE%" -c "import fastapi, uvicorn, jinja2, sqlalchemy, itsdangerous, multipart, xlsxwriter, psycopg, paho.mqtt.client" >nul 2>&1
+  if errorlevel 1 set "NEED_INSTALL=1"
 )
 
-python -c "import psycopg" >nul 2>&1
+if "%NEED_INSTALL%"=="1" (
+  call :RUN_PIP_INSTALL
+  if errorlevel 1 goto :END
+) else (
+  echo [INFO] Skipping pip install. Existing venv dependencies look healthy.
+  echo [INFO] Skipping pip install. Existing venv dependencies look healthy. >> "%LOGFILE%"
+)
+
+if not exist "%PYTHON_EXE%" (
+  echo [ERROR] Python executable not found in venv: %PYTHON_EXE%
+  echo [ERROR] Python executable not found in venv: %PYTHON_EXE% >> "%LOGFILE%"
+  goto :END
+)
+
+"%PYTHON_EXE%" -c "import fastapi, uvicorn, jinja2, sqlalchemy, itsdangerous, multipart, xlsxwriter, psycopg, paho.mqtt.client" >nul 2>&1
 if errorlevel 1 (
-  echo [ERROR] psycopg is missing for PostgreSQL connection.
-  echo [ERROR] Install psycopg or add psycopg wheels into: %WHEELS%
-  echo [ERROR] psycopg is missing for PostgreSQL connection. >> "%LOGFILE%"
+  echo [ERROR] One or more required Python packages are missing after venv setup.
+  echo [ERROR] Check offline wheels and %LOGFILE%
+  echo [ERROR] One or more required Python packages are missing after venv setup. >> "%LOGFILE%"
   goto :END
 )
 
@@ -153,10 +190,18 @@ if not exist "%PROJ%\python\app.py" (
   goto :END
 )
 
+"%PYTHON_EXE%" -c "from python.app import app" >> "%LOGFILE%" 2>&1
+if errorlevel 1 (
+  echo [ERROR] Application import failed. Check log: %LOGFILE%
+  echo [ERROR] Application import failed. >> "%LOGFILE%"
+  goto :END
+)
+
+:RUN_SERVER
 echo.
 echo [RUN] Uvicorn starting at http://%HOST%:%PORT% ...
-echo [RUN] uvicorn python.app:app --host %HOST% --port %PORT% --no-access-log >> "%LOGFILE%"
-python -m uvicorn python.app:app --host %HOST% --port %PORT% --no-access-log >> "%LOGFILE%" 2>&1
+echo [RUN] uvicorn python.app:app --host %HOST% --port %PORT% --proxy-headers --no-access-log >> "%LOGFILE%"
+"%PYTHON_EXE%" -m uvicorn python.app:app --host %HOST% --port %PORT% --proxy-headers --no-access-log >> "%LOGFILE%" 2>&1
 set "RC=%ERRORLEVEL%"
 echo [INFO] Uvicorn exited with code %RC% >> "%LOGFILE%"
 
@@ -164,9 +209,21 @@ echo.
 if "%RC%" NEQ "0" (
   echo [WARN] Uvicorn exited with code %RC%
   echo [WARN] Check log: %LOGFILE%
+  if /I "%SUPPORTHUB_AUTO_RESTART%"=="1" goto :RESTART_SERVER
+  if /I "%SUPPORTHUB_AUTO_RESTART%"=="true" goto :RESTART_SERVER
+  if /I "%SUPPORTHUB_AUTO_RESTART%"=="yes" goto :RESTART_SERVER
+  if /I "%SUPPORTHUB_AUTO_RESTART%"=="on" goto :RESTART_SERVER
 ) else (
   echo [OK] Uvicorn exited normally.
 )
+
+goto :END
+
+:RESTART_SERVER
+echo [WARN] Restarting Uvicorn in %SUPPORTHUB_RESTART_DELAY_SECONDS% seconds...
+echo [WARN] Restarting Uvicorn in %SUPPORTHUB_RESTART_DELAY_SECONDS% seconds... >> "%LOGFILE%"
+timeout /t %SUPPORTHUB_RESTART_DELAY_SECONDS% /nobreak >nul
+goto :RUN_SERVER
 
 :END
 echo.
@@ -174,6 +231,19 @@ echo (Window will stay open) Press any key to close...
 pause >nul
 endlocal
 goto :EOF
+
+:RUN_PIP_INSTALL
+echo.
+echo [INSTALL] Offline install from wheels ...
+echo [INSTALL] pip install --no-index --find-links "%WHEELS%" -r "%REQ%"
+echo [INSTALL] Offline install from wheels ... >> "%LOGFILE%"
+"%PYTHON_EXE%" -m pip install --no-index --find-links "%WHEELS%" -r "%REQ%" >> "%LOGFILE%" 2>&1
+if errorlevel 1 (
+  echo [ERROR] Offline pip install failed. Check log: %LOGFILE%
+  echo [ERROR] Offline pip install failed. >> "%LOGFILE%"
+  exit /b 1
+)
+exit /b 0
 
 :LOAD_OPTIONAL_SETTING
 if defined %~1 goto :EOF

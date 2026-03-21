@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 
@@ -20,7 +21,7 @@ def query_done_or_cancel(
     if equipment:
         q = q.filter(Ticket.equipment == equipment)
     if start_utc:
-        q = q.filter(Ticket.created_at >= start_utc)
+        q = q.filter(or_(Ticket.closed_at.is_(None), Ticket.closed_at >= start_utc))
     if end_utc:
         q = q.filter(Ticket.created_at <= end_utc)
     return q.order_by(Ticket.closed_at.desc().nullslast()).all()

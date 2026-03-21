@@ -201,10 +201,17 @@ class ProblemMatch(Base):
     __tablename__ = "problem_matches"
     id = Column(Integer, primary_key=True)
     machine = Column(String(100), nullable=False, index=True)
+    machine_type = Column(String(100), nullable=False, default="", index=True)
+    machine_id = Column(String(100), nullable=False, default="", index=True)
     problem = Column(String(150), nullable=False, index=True)
     class_name = Column(String(100), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     __table_args__ = (
-        UniqueConstraint("machine", "problem", name="uq_problem_match_machine_problem"),
+        UniqueConstraint(
+            "machine",
+            "machine_type",
+            "machine_id",
+            "problem",
+            name="uq_problem_match_scope",
+        ),
     )
-

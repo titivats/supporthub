@@ -2,6 +2,7 @@ from typing import Optional
 
 from fastapi import Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 
@@ -72,7 +73,11 @@ def register_auth_user_routes(app, templates, ctx):
             return templates.TemplateResponse("add_user.html", {"request": request, "error": "Username already exists."}, status_code=400)
         role = _normalize_role(role, allow_admin=False) or "Operator"
         db.add(User(username=username, password_hash=sha256(password), role=role))
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return templates.TemplateResponse("add_user.html", {"request": request, "error": "Username already exists."}, status_code=400)
         return RedirectResponse("/login?created=1", status_code=303)
 
     @app.get("/admin/users", response_class=HTMLResponse)
@@ -106,7 +111,11 @@ def register_auth_user_routes(app, templates, ctx):
             raise HTTPException(status_code=400, detail="invalid role")
         u = User(username=username, password_hash=sha256(password), role=role)
         db.add(u)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="duplicated")
         return RedirectResponse("/admin/users", status_code=303)
 
     @app.post("/admin/users/update/{user_id}")
@@ -151,4 +160,3 @@ def register_auth_user_routes(app, templates, ctx):
         db.delete(u)
         db.commit()
         return RedirectResponse("/admin/users", status_code=303)
-

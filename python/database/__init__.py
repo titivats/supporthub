@@ -18,6 +18,7 @@ from python.database.core import (
     engine,
     get_db,
     init_db,
+    run_db_maintenance,
 )
 
 __all__ = [
@@ -40,4 +41,5 @@ __all__ = [
     "engine",
     "get_db",
     "init_db",
+    "run_db_maintenance",
 ]

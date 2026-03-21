@@ -48,6 +48,21 @@ def _round_secs(value: float | int) -> int:
     return int(round(float(value or 0)))
 
 
+def _clip_interval_seconds(
+    start_at: Optional[datetime],
+    end_at: Optional[datetime],
+    window_start: datetime,
+    window_end: datetime,
+) -> float:
+    if not start_at or not end_at:
+        return 0.0
+    clipped_start = max(start_at, window_start)
+    clipped_end = min(end_at, window_end)
+    if clipped_end <= clipped_start:
+        return 0.0
+    return float((clipped_end - clipped_start).total_seconds())
+
+
 def _compute_raw_metrics(rows, monitored_start: datetime, monitored_end: datetime) -> Dict[str, object]:
     downtime_secs = 0.0
     total_doing_secs = 0
@@ -64,7 +79,12 @@ def _compute_raw_metrics(rows, monitored_start: datetime, monitored_end: datetim
         total_doing_secs += int(row.doing_secs or 0)
 
         if row.created_at and row.closed_at:
-            d = float((row.closed_at - row.created_at).total_seconds())
+            d = _clip_interval_seconds(
+                row.created_at,
+                row.closed_at,
+                monitored_start,
+                monitored_end,
+            )
             if d > 0:
                 downtime_secs += d
                 incident_count += 1

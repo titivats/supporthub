@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import threading
 from collections import deque
@@ -8,143 +7,19 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict
 
-from sqlalchemy import text
-
-from python.database import SessionLocal, engine
-
 try:
     import paho.mqtt.client as mqtt
 except Exception:  # pragma: no cover - optional dependency
     mqtt = None
-
-
-def _to_iso(ts: datetime | None) -> str | None:
-    return ts.isoformat() if ts else None
-
-
-def _safe_float(v: Any) -> float | None:
-    if isinstance(v, bool):
-        return None
-    if isinstance(v, (int, float)):
-        return float(v)
-    if isinstance(v, str):
-        try:
-            return float(v.strip())
-        except Exception:
-            return None
-    return None
-
-
-def _extract_numeric(obj: Any, prefix: str = "", out: Dict[str, float] | None = None) -> Dict[str, float]:
-    if out is None:
-        out = {}
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            key = f"{prefix}.{k}" if prefix else str(k)
-            _extract_numeric(v, key, out)
-        return out
-    if isinstance(obj, list):
-        for i, v in enumerate(obj):
-            key = f"{prefix}[{i}]" if prefix else f"[{i}]"
-            _extract_numeric(v, key, out)
-        return out
-    num = _safe_float(obj)
-    if num is not None:
-        out[prefix or "value"] = num
-    return out
-
-
-def _normalize_metric_key(value: str) -> str:
-    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
-
-
-_METRIC_ALIASES = {
-    "voltage": ("voltage", "volt", "volts", "v"),
-    "current": ("current", "ampere", "amperes", "amps", "amp", "a"),
-    "power": ("power", "watt", "watts", "w"),
-    "power_factor": ("powerfactor", "power_factor", "pf"),
-    "energy": ("energy", "kwh", "wh"),
-    "frequency": ("frequency", "freq", "hz", "f"),
-}
-
-
-def _canonical_metric_name(value: str) -> str | None:
-    normalized = _normalize_metric_key(value)
-    if not normalized:
-        return None
-
-    exact_alias_map = {}
-    for canonical, aliases in _METRIC_ALIASES.items():
-        normalized_aliases = {_normalize_metric_key(alias) for alias in aliases if alias}
-        for alias in normalized_aliases:
-            exact_alias_map[alias] = canonical
-
-    exact_match = exact_alias_map.get(normalized)
-    if exact_match:
-        return exact_match
-
-    for canonical, aliases in _METRIC_ALIASES.items():
-        normalized_aliases = {_normalize_metric_key(alias) for alias in aliases if alias}
-        for alias in sorted(normalized_aliases, key=len, reverse=True):
-            if normalized.endswith(alias) or normalized.startswith(alias):
-                return canonical
-    return None
-
-
-def _canonicalize_numeric_key(raw_key: str) -> str:
-    key = (raw_key or "").strip()
-    if not key:
-        return key
-
-    if "." in key:
-        prefix, suffix = key.rsplit(".", 1)
-    else:
-        prefix, suffix = "", key
-
-    canonical_suffix = _canonical_metric_name(suffix) or _canonical_metric_name(key)
-    if not canonical_suffix:
-        return key
-    return f"{prefix}.{canonical_suffix}" if prefix else canonical_suffix
-
-
-def _canonicalize_numeric_map(numeric_map: Dict[str, float]) -> Dict[str, float]:
-    if not numeric_map:
-        return {}
-
-    out: Dict[str, float] = {}
-    for key, value in numeric_map.items():
-        canonical_key = _canonicalize_numeric_key(key)
-        current_value = out.get(canonical_key)
-        numeric_value = float(value)
-
-        if current_value is None:
-            out[canonical_key] = numeric_value
-            continue
-
-        # Prefer non-zero values when multiple aliases point to the same metric.
-        if float(current_value) == 0.0 and numeric_value != 0.0:
-            out[canonical_key] = numeric_value
-    return out
-
-
-def _pick_metric_value(numeric_map: Dict[str, float], aliases: tuple[str, ...]) -> float | None:
-    if not numeric_map:
-        return None
-
-    alias_keys = {_normalize_metric_key(a) for a in aliases if a}
-    if not alias_keys:
-        return None
-
-    for key, val in numeric_map.items():
-        if _normalize_metric_key(key) in alias_keys:
-            return float(val)
-
-    for key, val in numeric_map.items():
-        normalized_key = _normalize_metric_key(key)
-        for alias in alias_keys:
-            if normalized_key.endswith(alias):
-                return float(val)
-    return None
+from python.iot_monitor.iot_monitor_parser import (
+    parse_payload_numeric_map,
+    pick_metric_value,
+    to_iso,
+)
+from python.iot_monitor.iot_monitor_storage import (
+    insert_measurement_row,
+    insert_status_log_row,
+)
 
 
 @dataclass
@@ -199,116 +74,19 @@ class IoTMonitorService:
             "broker": f"{self.host}:{self.port}",
             "topic": self.topic,
             "mqtt_client": self.client_id,
-            "voltage": _pick_metric_value(numeric_map, ("voltage", "volt", "volts", "v")),
-            "current": _pick_metric_value(numeric_map, ("current", "ampere", "amperes", "amps", "amp", "a")),
-            "power": _pick_metric_value(numeric_map, ("power", "watt", "watts", "w")),
-            "power_factor": _pick_metric_value(numeric_map, ("powerfactor", "power_factor", "pf")),
-            "energy": _pick_metric_value(numeric_map, ("energy", "kwh", "wh")),
-            "frequency": _pick_metric_value(numeric_map, ("frequency", "freq", "hz", "f")),
+            "voltage": pick_metric_value(numeric_map, ("voltage", "volt", "volts", "v")),
+            "current": pick_metric_value(numeric_map, ("current", "ampere", "amperes", "amps", "amp", "a")),
+            "power": pick_metric_value(numeric_map, ("power", "watt", "watts", "w")),
+            "power_factor": pick_metric_value(numeric_map, ("powerfactor", "power_factor", "pf")),
+            "energy": pick_metric_value(numeric_map, ("energy", "kwh", "wh")),
+            "frequency": pick_metric_value(numeric_map, ("frequency", "freq", "hz", "f")),
             "raw_payload": payload or None,
         }
-
-    def _insert_status_log_row(self, row: Dict[str, Any]) -> None:
-        if engine.dialect.name != "postgresql":
-            return
-
-        db = SessionLocal()
-        try:
-            db.execute(
-                text(
-                    """
-                    INSERT INTO public.iot_monitor_status_logs (
-                        recorded_at,
-                        broker,
-                        topic,
-                        mqtt_client,
-                        connected,
-                        last_message_at,
-                        message_count,
-                        parse_error_count,
-                        last_payload,
-                        last_error
-                    )
-                    VALUES (
-                        :recorded_at,
-                        :broker,
-                        :topic,
-                        :mqtt_client,
-                        :connected,
-                        :last_message_at,
-                        :message_count,
-                        :parse_error_count,
-                        :last_payload,
-                        :last_error
-                    )
-                    """
-                ),
-                row,
-            )
-            db.commit()
-        except Exception as exc:
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            print(f"[IOT] failed to insert status log: {exc}")
-        finally:
-            db.close()
-
-    def _insert_measurement_row(self, row: Dict[str, Any]) -> None:
-        if engine.dialect.name != "postgresql":
-            return
-
-        db = SessionLocal()
-        try:
-            db.execute(
-                text(
-                    """
-                    INSERT INTO public.iot_monitor_measurements (
-                        recorded_at,
-                        broker,
-                        topic,
-                        mqtt_client,
-                        voltage,
-                        current,
-                        power,
-                        power_factor,
-                        energy,
-                        frequency,
-                        raw_payload
-                    )
-                    VALUES (
-                        :recorded_at,
-                        :broker,
-                        :topic,
-                        :mqtt_client,
-                        :voltage,
-                        :current,
-                        :power,
-                        :power_factor,
-                        :energy,
-                        :frequency,
-                        :raw_payload
-                    )
-                    """
-                ),
-                row,
-            )
-            db.commit()
-        except Exception as exc:
-            try:
-                db.rollback()
-            except Exception:
-                pass
-            print(f"[IOT] failed to insert measurement row: {exc}")
-        finally:
-            db.close()
 
     def start(self) -> None:
         with self._lock:
             if self._started:
                 return
-            self._started = True
             self.last_error = ""
 
             if mqtt is None:
@@ -331,8 +109,11 @@ class IoTMonitorService:
                 self._client.on_message = self._on_message
                 self._client.connect_async(self.host, self.port, keepalive=30)
                 self._client.loop_start()
+                self._started = True
             except Exception as exc:
                 self.last_error = f"MQTT setup failed: {exc}"
+                self._client = None
+                self._started = False
 
     def reconnect(self, host: str | None = None, port: int | None = None,
                   topic: str | None = None, client_id: str | None = None) -> Dict[str, Any]:
@@ -388,7 +169,7 @@ class IoTMonitorService:
         with self._lock:
             trend_out: Dict[str, list[Dict[str, Any]]] = {}
             for key, q in self.series.items():
-                trend_out[key] = [{"ts": _to_iso(s.ts), "value": s.value} for s in q]
+                trend_out[key] = [{"ts": to_iso(s.ts), "value": s.value} for s in q]
 
             return {
                 "broker": f"{self.host}:{self.port}",
@@ -396,7 +177,7 @@ class IoTMonitorService:
                 "client_id": self.client_id,
                 "connected": self.connected,
                 "last_error": self.last_error,
-                "last_message_at": _to_iso(self.last_message_at),
+                "last_message_at": to_iso(self.last_message_at),
                 "last_payload": self.last_payload,
                 "message_count": self.message_count,
                 "parse_error_count": self.parse_error_count,
@@ -423,7 +204,7 @@ class IoTMonitorService:
                 self.connected = False
                 self.last_error = f"MQTT connect failed (reason_code={reason_code})"
             status_row = self._build_status_log_row(now)
-        self._insert_status_log_row(status_row)
+        insert_status_log_row(status_row)
 
     def _on_disconnect(self, client, userdata, reason_code, properties=None):  # noqa: ANN001
         now = datetime.utcnow()
@@ -434,7 +215,7 @@ class IoTMonitorService:
             if int(rc) != 0:
                 self.last_error = f"MQTT disconnected (reason_code={reason_code})"
             status_row = self._build_status_log_row(now)
-        self._insert_status_log_row(status_row)
+        insert_status_log_row(status_row)
 
     def _on_message(self, client, userdata, msg):  # noqa: ANN001
         try:
@@ -443,21 +224,7 @@ class IoTMonitorService:
             payload = str(msg.payload)
 
         now = datetime.utcnow()
-        numeric_map: Dict[str, float] = {}
-
-        if payload:
-            try:
-                if payload.startswith("{") or payload.startswith("["):
-                    obj = json.loads(payload)
-                    numeric_map = _extract_numeric(obj)
-                else:
-                    num = _safe_float(payload)
-                    if num is not None:
-                        numeric_map = {"value": num}
-            except Exception:
-                numeric_map = {}
-
-        numeric_map = _canonicalize_numeric_map(numeric_map)
+        numeric_map: Dict[str, float] = parse_payload_numeric_map(payload)
 
         status_row: Dict[str, Any]
         measurement_row: Dict[str, Any]
@@ -476,8 +243,8 @@ class IoTMonitorService:
                     self.series[key].append(_Sample(ts=now, value=val))
             status_row = self._build_status_log_row(now)
             measurement_row = self._build_measurement_row(now, payload, numeric_map)
-        self._insert_status_log_row(status_row)
-        self._insert_measurement_row(measurement_row)
+        insert_status_log_row(status_row)
+        insert_measurement_row(measurement_row)
 
 
 iot_monitor = IoTMonitorService()

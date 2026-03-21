@@ -22,7 +22,7 @@
     color:#111827;
   }
   .container{
-    max-width:1400px;
+    max-width:1460px;
     margin:26px auto 34px;
     padding:0 18px;
   }
@@ -141,7 +141,7 @@
   }
   .pm-grid{
     display:grid;
-    grid-template-columns:repeat(3, minmax(0, 1fr)) 140px;
+    grid-template-columns:repeat(5, minmax(0, 1fr)) 140px;
     gap:12px;
     align-items:end;
   }
@@ -182,6 +182,9 @@
   .mb12{margin-bottom:12px}
   .mt12{margin-top:12px}
 
+  @media (max-width: 1180px){
+    .pm-grid{grid-template-columns:repeat(2, minmax(0, 1fr));}
+  }
   @media (max-width: 980px){
     .top{flex-direction:column; align-items:stretch;}
     .grid-2{grid-template-columns:1fr;}
@@ -194,7 +197,7 @@
   <div class="top">
     <div>
       <h1>Problem Match</h1>
-      <div class="lead">Map Problem to Class for each Machine. Used to classify events for OEE/MTTR/MTBF/%Downtime rules.</div>
+      <div class="lead">Map Problem to Class for each Machine. Used to classify events for Availability/MTTR/MTBF/%Downtime rules.</div>
     </div>
     <div class="actions">
       <a class="btn" href="/">Back</a>
@@ -230,7 +233,7 @@
             </select>
           </div>
           <div class="pm-grid">
-            <div style="grid-column:1 / span 3;">
+            <div style="grid-column:1 / span 5;">
               <label>Problem</label>
               <input name="problem" required placeholder="Problem">
             </div>
@@ -247,7 +250,7 @@
           <p class="group-note">Create or delete Class used by Problem Match.</p>
         </div>
         <form class="pm-grid mb12" method="post" action="/admin/problem-match/create-class">
-          <div style="grid-column:1 / span 3;">
+          <div style="grid-column:1 / span 5;">
             <label>Create Class</label>
             <input name="class_name" required placeholder="Class name">
           </div>
@@ -256,7 +259,7 @@
           </div>
         </form>
         <form class="pm-grid" method="post" action="/admin/problem-match/delete-class">
-          <div style="grid-column:1 / span 3;">
+          <div style="grid-column:1 / span 5;">
             <label>Delete Class</label>
             <select name="class_id" required>
               <option value="">-- Select Class --</option>
@@ -277,7 +280,7 @@
     <div class="card">
       <div class="group-head">
         <h3>Map Problem to Class</h3>
-        <p class="group-note">Machine / Problem / Class and Filter Machine / Filter Problem / Filter Class are aligned in equal grid.</p>
+        <p class="group-note">Support precise mapping by Machine / Machine Type / Machine ID / Problem / Class.</p>
       </div>
 
       <form class="pm-grid mb12" method="post" action="/admin/problem-match/save">
@@ -288,6 +291,18 @@
             {% for m in machine_options %}
               <option value="{{ m }}">{{ m }}</option>
             {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Machine Type (Optional)</label>
+          <select name="machine_type" id="map-machine-type">
+            <option value="">-- Machine Level --</option>
+          </select>
+        </div>
+        <div>
+          <label>Machine ID (Optional)</label>
+          <select name="machine_id" id="map-machine-id">
+            <option value="">-- All Machine ID --</option>
           </select>
         </div>
         <div>
@@ -321,6 +336,24 @@
           </select>
         </div>
         <div>
+          <label>Filter Machine Type</label>
+          <select name="filter_machine_type" id="filter-machine-type" data-selected="{{ filter_machine_type or '' }}">
+            <option value="">All</option>
+            {% for machine_type in all_machine_types %}
+              <option value="{{ machine_type }}" {% if filter_machine_type == machine_type %}selected{% endif %}>{{ machine_type }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Filter Machine ID</label>
+          <select name="filter_machine_id" id="filter-machine-id" data-selected="{{ filter_machine_id or '' }}">
+            <option value="">All</option>
+            {% for machine_id in all_machine_ids %}
+              <option value="{{ machine_id }}" {% if filter_machine_id == machine_id %}selected{% endif %}>{{ machine_id }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
           <label>Filter Problem</label>
           <select name="filter_problem" id="filter-problem">
             <option value="">All</option>
@@ -348,6 +381,8 @@
           <thead>
             <tr>
               <th>Machine</th>
+              <th>Machine Type</th>
+              <th>Machine ID</th>
               <th>Problem</th>
               <th>Class</th>
               <th>Created</th>
@@ -358,6 +393,8 @@
             {% for row in match_rows %}
               <tr>
                 <td>{{ row.machine }}</td>
+                <td>{{ row.machine_type or '-' }}</td>
+                <td>{{ row.machine_id or '-' }}</td>
                 <td>{{ row.problem }}</td>
                 <td>{{ row.class_name }}</td>
                 <td class="muted">{{ fmt_th(row.created_at) }}</td>
@@ -370,7 +407,7 @@
               </tr>
             {% endfor %}
             {% if match_rows|length == 0 %}
-              <tr><td colspan="5" class="muted">No mappings</td></tr>
+              <tr><td colspan="7" class="muted">No mappings</td></tr>
             {% endif %}
           </tbody>
         </table>
@@ -380,39 +417,120 @@
 </div>
 
 <script>
-  const problemOptionsByMachine = {{ problem_options_by_machine|tojson }};
+  const problemOptionsByScope = {{ problem_options_by_scope|tojson }};
   const machineTypeMap = {{ machine_type_map|tojson }};
+  const machineIdMap = {{ machine_id_map|tojson }};
+  const allMachineTypes = {{ all_machine_types|tojson }};
+  const allMachineIds = {{ all_machine_ids|tojson }};
 
-  function fillSelectOptions(selectEl, items, placeholderText){
-    const previous = selectEl.value || "";
+  function uniqueSorted(items){
+    const out = [];
+    const seen = new Set();
+    for(const raw of items || []){
+      const value = String(raw || "").trim();
+      if(!value) continue;
+      const key = value.toLowerCase();
+      if(seen.has(key)) continue;
+      seen.add(key);
+      out.push(value);
+    }
+    return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }
+
+  function fillSelectOptions(selectEl, items, placeholderText, selectedValue=""){
+    if(!selectEl) return;
+    const previous = selectedValue || selectEl.dataset.selected || selectEl.value || "";
+    const normalizedItems = uniqueSorted(items);
     selectEl.innerHTML = "";
     const first = document.createElement("option");
     first.value = "";
     first.textContent = placeholderText;
     selectEl.appendChild(first);
-    for(const item of items){
+    for(const item of normalizedItems){
       const opt = document.createElement("option");
       opt.value = item;
       opt.textContent = item;
+      if(previous && String(item).toLowerCase() === String(previous).toLowerCase()){
+        opt.selected = true;
+      }
       selectEl.appendChild(opt);
     }
-    if(previous && items.some(v => String(v).toLowerCase() === previous.toLowerCase())){
-      const exact = items.find(v => String(v).toLowerCase() === previous.toLowerCase());
-      selectEl.value = exact || previous;
+    if(previous && !normalizedItems.some(v => String(v).toLowerCase() === String(previous).toLowerCase())){
+      const extra = document.createElement("option");
+      extra.value = previous;
+      extra.textContent = previous;
+      extra.selected = true;
+      selectEl.appendChild(extra);
     }
   }
 
+  function getMachineTypes(machine){
+    const machineVal = String(machine || "").trim();
+    if(!machineVal) return allMachineTypes;
+    return machineTypeMap[machineVal] || [];
+  }
+
+  function getMachineIds(machine, machineType){
+    const machineVal = String(machine || "").trim();
+    const machineTypeVal = String(machineType || "").trim();
+    if(machineVal && machineTypeVal){
+      return machineIdMap[`${machineVal}||${machineTypeVal}`] || [];
+    }
+    if(machineVal && !machineTypeVal){
+      const ids = [];
+      const prefix = `${machineVal}||`;
+      Object.keys(machineIdMap || {}).forEach((key) => {
+        if(key === machineVal || key.startsWith(prefix)){
+          ids.push(...(machineIdMap[key] || []));
+        }
+      });
+      return ids;
+    }
+    return allMachineIds;
+  }
+
+  function getProblemOptions(machine, machineType){
+    const machineVal = String(machine || "").trim();
+    const machineTypeVal = String(machineType || "").trim();
+    if(!machineVal) return [];
+    const items = [...(problemOptionsByScope[machineVal] || [])];
+    if(machineTypeVal){
+      items.push(...(problemOptionsByScope[`${machineVal}||${machineTypeVal}`] || []));
+    }
+    return uniqueSorted(items);
+  }
+
+  function updateMapMachineTypes(){
+    const machine = document.getElementById("map-machine")?.value || "";
+    fillSelectOptions(
+      document.getElementById("map-machine-type"),
+      getMachineTypes(machine),
+      "-- Machine Level --"
+    );
+  }
+
+  function updateMapMachineIds(){
+    const machine = document.getElementById("map-machine")?.value || "";
+    const machineType = document.getElementById("map-machine-type")?.value || "";
+    fillSelectOptions(
+      document.getElementById("map-machine-id"),
+      getMachineIds(machine, machineType),
+      "-- All Machine ID --"
+    );
+  }
+
   function updateMapProblemOptions(){
-    const machine = (document.getElementById("map-machine")?.value || "").trim();
+    const machine = document.getElementById("map-machine")?.value || "";
+    const machineType = document.getElementById("map-machine-type")?.value || "";
     const select = document.getElementById("map-problem");
     if(!select) return;
     if(!machine){
       fillSelectOptions(select, [], "-- Select Machine First --");
       return;
     }
-    const items = problemOptionsByMachine[machine] || [];
+    const items = getProblemOptions(machine, machineType);
     if(items.length === 0){
-      fillSelectOptions(select, [], "-- No Problem for selected Machine --");
+      fillSelectOptions(select, [], "-- No Problem for selected scope --");
       return;
     }
     fillSelectOptions(select, items, "-- Select Problem --");
@@ -420,16 +538,30 @@
 
   function updateAddProblemMachineTypes(){
     const machine = (document.getElementById("add-problem-machine")?.value || "").trim();
-    const typeSelect = document.getElementById("add-problem-type");
-    if(!typeSelect) return;
-    const types = machineTypeMap[machine] || [];
-    fillSelectOptions(typeSelect, types, "-- Machine Level (Optional) --");
+    fillSelectOptions(
+      document.getElementById("add-problem-type"),
+      getMachineTypes(machine),
+      "-- Machine Level (Optional) --"
+    );
+  }
+
+  function updateFilterMachineTypes(){
+    const machine = document.getElementById("filter-machine")?.value || "";
+    const select = document.getElementById("filter-machine-type");
+    fillSelectOptions(select, getMachineTypes(machine), "All", select?.dataset.selected || "");
+  }
+
+  function updateFilterMachineIds(){
+    const machine = document.getElementById("filter-machine")?.value || "";
+    const machineType = document.getElementById("filter-machine-type")?.value || "";
+    const select = document.getElementById("filter-machine-id");
+    fillSelectOptions(select, getMachineIds(machine, machineType), "All", select?.dataset.selected || "");
   }
 
   function initAutoFilter(){
     const form = document.getElementById("filter-form");
     if(!form) return;
-    ["filter-machine", "filter-problem", "filter-class"].forEach(id => {
+    ["filter-machine", "filter-machine-type", "filter-machine-id", "filter-problem", "filter-class"].forEach(id => {
       const el = document.getElementById(id);
       if(el){
         el.addEventListener("change", () => form.submit());
@@ -437,9 +569,35 @@
     });
   }
 
-  document.getElementById("map-machine")?.addEventListener("change", updateMapProblemOptions);
+  document.getElementById("map-machine")?.addEventListener("change", () => {
+    updateMapMachineTypes();
+    updateMapMachineIds();
+    updateMapProblemOptions();
+  });
+  document.getElementById("map-machine-type")?.addEventListener("change", () => {
+    updateMapMachineIds();
+    updateMapProblemOptions();
+  });
   document.getElementById("add-problem-machine")?.addEventListener("change", updateAddProblemMachineTypes);
+  document.getElementById("filter-machine")?.addEventListener("change", () => {
+    const typeSelect = document.getElementById("filter-machine-type");
+    const idSelect = document.getElementById("filter-machine-id");
+    if(typeSelect) typeSelect.dataset.selected = "";
+    if(idSelect) idSelect.dataset.selected = "";
+    updateFilterMachineTypes();
+    updateFilterMachineIds();
+  });
+  document.getElementById("filter-machine-type")?.addEventListener("change", () => {
+    const idSelect = document.getElementById("filter-machine-id");
+    if(idSelect) idSelect.dataset.selected = "";
+    updateFilterMachineIds();
+  });
+
+  updateMapMachineTypes();
+  updateMapMachineIds();
   updateMapProblemOptions();
   updateAddProblemMachineTypes();
+  updateFilterMachineTypes();
+  updateFilterMachineIds();
   initAutoFilter();
 </script>

@@ -70,6 +70,7 @@ def register_web_routes(app, templates, deps):
     _add_master_audit = deps["_add_master_audit"]
     _get_master_rows_sorted = deps["_get_master_rows_sorted"]
     bump_active_version = deps["bump_active_version"]
+    bump_master_data_version = deps["bump_master_data_version"]
     EQUIPMENTS = deps["EQUIPMENTS"]
     iot_monitor = deps["iot_monitor"]
 
@@ -212,7 +213,11 @@ def register_web_routes(app, templates, deps):
         return me
 
     def _commit_master_change(db: Session) -> None:
-        commit_master_change(db, bump_active_version=bump_active_version)
+        commit_master_change(
+            db,
+            bump_active_version=bump_active_version,
+            bump_master_data_version=bump_master_data_version,
+        )
 
     def _ensure_master_machine(db: Session, actor: str, machine_val: str, details: str) -> None:
         ensure_master_machine(

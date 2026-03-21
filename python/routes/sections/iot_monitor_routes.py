@@ -36,9 +36,13 @@ def register_iot_monitor_routes(app, templates, ctx):
             body = await request.json()
         except Exception:
             body = {}
+        try:
+            port_val = int(body["port"]) if body.get("port") else None
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid MQTT port")
         result = iot_monitor.reconnect(
             host=body.get("host"),
-            port=int(body["port"]) if body.get("port") else None,
+            port=port_val,
             topic=body.get("topic"),
             client_id=body.get("client_id"),
         )

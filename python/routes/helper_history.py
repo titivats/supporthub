@@ -117,12 +117,27 @@ def apply_problem_match_class_filter(
     if not class_key:
         return rows
 
-    allowed_pairs = {
-        (_clean(row.machine).lower(), _clean(row.problem).lower())
+    match_rows = [
+        row
         for row in db.query(ProblemMatch).all()
         if _clean(row.class_name).lower() == class_key and _clean(row.machine) and _clean(row.problem)
-    }
-    if not allowed_pairs:
+    ]
+    if not match_rows:
+        return []
+
+    scoped_matches: Dict[tuple[str, str], List[Dict[str, str]]] = {}
+    for row in match_rows:
+        machine_val = _clean(row.machine)
+        problem_val = _clean(row.problem)
+        if not machine_val or not problem_val:
+            continue
+        scoped_matches.setdefault((machine_val.lower(), problem_val.lower()), []).append(
+            {
+                "machine_type": _clean(getattr(row, "machine_type", "")),
+                "machine_id": _clean(getattr(row, "machine_id", "")),
+            }
+        )
+    if not scoped_matches:
         return []
 
     out: List[Any] = []
@@ -134,9 +149,23 @@ def apply_problem_match_class_filter(
                 machine_val = _clean(equipment_val.split("||", 1)[0])
             else:
                 machine_val = equipment_val
+        machine_type_val = _clean(getattr(row, "history_machine_type", ""))
+        machine_id_val = _clean(getattr(row, "machine_id", ""))
         problem_val = _clean(getattr(row, "problem", ""))
         if not machine_val or not problem_val:
             continue
-        if (machine_val.lower(), problem_val.lower()) in allowed_pairs:
+        candidates = scoped_matches.get((machine_val.lower(), problem_val.lower()), [])
+        best_score = -1
+        for candidate in candidates:
+            candidate_type = _clean(candidate.get("machine_type", ""))
+            candidate_id = _clean(candidate.get("machine_id", ""))
+            if candidate_type and candidate_type.lower() != machine_type_val.lower():
+                continue
+            if candidate_id and candidate_id.lower() != machine_id_val.lower():
+                continue
+            score = (1 if candidate_type else 0) + (1 if candidate_id else 0)
+            if score > best_score:
+                best_score = score
+        if best_score >= 0:
             out.append(row)
     return out

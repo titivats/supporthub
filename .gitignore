@@ -14,6 +14,7 @@ wheels/
 *.log
 127.0.0.1
 supporthub.local.bat
+secret_key
 
 *.db
 *.db-wal
