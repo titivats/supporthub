@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
+python-dotenv
 jinja2
 SQLAlchemy>=2
 psycopg[binary]>=3.2

@@ -1,19 +1,17 @@
-import os
-
 import requests
 
-LINE_TOKEN = os.getenv("LINE_NOTIFY_TOKEN", "").strip()
+from python.settings import LINE_NOTIFY_TOKEN
 
 
 def line_notify(message: str) -> None:
-    if not LINE_TOKEN:
+    if not LINE_NOTIFY_TOKEN:
         return
     try:
         requests.post(
             "https://notify-api.line.me/api/notify",
-            headers={"Authorization": f"Bearer {LINE_TOKEN}"},
+            headers={"Authorization": f"Bearer {LINE_NOTIFY_TOKEN}"},
             data={"message": message},
-            timeout=3.0,
+            timeout=5,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        print("[LINE] notify failed:", exc)

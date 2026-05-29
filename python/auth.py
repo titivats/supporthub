@@ -1,16 +1,11 @@
 import hashlib
 import hmac
-import os
 import re
-import secrets
 
 from itsdangerous import BadSignature, TimestampSigner
 
-APP_ENV = (os.getenv("SUPPORTHUB_ENV") or "local").strip().lower()
-SECRET = (os.getenv("SUPPORTHUB_SECRET") or "").strip() or secrets.token_urlsafe(48)
-SESSION_AGE = int(os.getenv("SUPPORTHUB_SESSION_AGE", str(60 * 60 * 24 * 7)))
-default_secure_cookies = "false" if APP_ENV in ("local", "dev", "development") else "true"
-SECURE_COOKIES = os.getenv("SUPPORTHUB_SECURE_COOKIES", default_secure_cookies).lower() in ("1", "true", "yes", "on")
+from python.settings import APP_ENV, SECURE_COOKIES, SECRET, SESSION_AGE
+
 HEX64 = re.compile(r"^[0-9a-f]{64}$", re.I)
 
 

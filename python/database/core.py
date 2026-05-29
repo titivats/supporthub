@@ -7,20 +7,9 @@ from sqlalchemy import Column, DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from python.auth import sha256
+from python.settings import BOOTSTRAP_ADMIN_PASSWORD, DATABASE_URL, LINE_MACHINE_MAP_FILE
 
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-DATABASE_URL = (os.getenv("SUPPORTHUB_DATABASE_URL") or "").strip()
-if not DATABASE_URL:
-    raise RuntimeError("SUPPORTHUB_DATABASE_URL is required (PostgreSQL only).")
-if not (
-    DATABASE_URL.lower().startswith("postgresql://")
-    or DATABASE_URL.lower().startswith("postgresql+psycopg://")
-):
-    raise RuntimeError(
-        "Invalid SUPPORTHUB_DATABASE_URL. PostgreSQL URL is required "
-        "(postgresql:// or postgresql+psycopg://)."
-    )
-
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
@@ -556,8 +545,7 @@ DEFAULT_LINE_MACHINE_MAP_FILE = os.path.join(BASE_DIR, "database", "monitoring_l
 
 
 def _load_line_monitoring_raw_from_file():
-    map_path_env = (os.getenv("SUPPORTHUB_LINE_MACHINE_MAP_FILE") or "").strip()
-    map_path = Path(map_path_env).expanduser() if map_path_env else Path(DEFAULT_LINE_MACHINE_MAP_FILE)
+    map_path = Path(LINE_MACHINE_MAP_FILE).expanduser() if LINE_MACHINE_MAP_FILE else Path(DEFAULT_LINE_MACHINE_MAP_FILE)
     if not map_path.exists():
         return {}
     try:
@@ -838,11 +826,11 @@ def _ensure_admin_user() -> None:
         db = SessionLocal()
         admin = db.query(User).filter(User.username == "ADMIN").first()
         if not admin:
-            bootstrap_password = (os.getenv("SUPPORTHUB_BOOTSTRAP_ADMIN_PASSWORD") or "").strip()
-            if not bootstrap_password:
+            if not BOOTSTRAP_ADMIN_PASSWORD:
                 raise RuntimeError(
-                    "ADMIN user is missing. Set SUPPORTHUB_BOOTSTRAP_ADMIN_PASSWORD once to bootstrap ADMIN."
+                    "ADMIN user is missing. Set SUPPORTHUB_BOOTSTRAP_ADMIN_PASSWORD in .env once to bootstrap ADMIN."
                 )
+            bootstrap_password = BOOTSTRAP_ADMIN_PASSWORD
             db.add(User(username="ADMIN", password_hash=sha256(bootstrap_password), role="Admin"))
             db.commit()
             return

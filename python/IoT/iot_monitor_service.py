@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import threading
 from collections import deque
 from dataclasses import dataclass
@@ -11,6 +10,13 @@ from typing import Any, Dict
 from sqlalchemy import text
 
 from python.db import SessionLocal, engine
+from python.settings import (
+    IOT_SAMPLE_LIMIT,
+    MQTT_CLIENT_ID,
+    MQTT_HOST,
+    MQTT_PORT,
+    MQTT_TOPIC,
+)
 
 try:
     import paho.mqtt.client as mqtt
@@ -86,11 +92,11 @@ class _Sample:
 
 class IoTMonitorService:
     def __init__(self) -> None:
-        self.host = os.getenv("SUPPORTHUB_MQTT_HOST", "192.168.1.109").strip() or "192.168.1.109"
-        self.port = int(os.getenv("SUPPORTHUB_MQTT_PORT", "1883"))
-        self.topic = os.getenv("SUPPORTHUB_MQTT_TOPIC", "power/pzem").strip() or "power/pzem"
-        self.client_id = os.getenv("SUPPORTHUB_MQTT_CLIENT_ID", "SUPPORTHUB-IOT-MONITOR").strip() or "SUPPORTHUB-IOT-MONITOR"
-        self.sample_limit = int(os.getenv("SUPPORTHUB_IOT_SAMPLE_LIMIT", "180"))
+        self.host = MQTT_HOST
+        self.port = MQTT_PORT
+        self.topic = MQTT_TOPIC
+        self.client_id = MQTT_CLIENT_ID
+        self.sample_limit = IOT_SAMPLE_LIMIT
 
         self._lock = threading.Lock()
         self._client = None
