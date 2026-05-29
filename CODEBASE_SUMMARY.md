@@ -157,44 +157,110 @@ Edit defaults in `python/master_data.py` before seeding.
 
 ## How to Run
 
-### 1. Setup
+### Prerequisites
+
+- **Python 3.10+** with `venv`
+- **PostgreSQL** running (e.g. Docker on `127.0.0.1:5432`)
+- Project root: `d:\project\supporthub` (all commands below run from here)
+
+---
+
+### First-time setup
+
+**1. Config**
 
 ```powershell
 cd d:\project\supporthub
 copy .env.example .env
-# edit .env — especially SUPPORTHUB_DATABASE_URL
+notepad .env
+```
 
+Edit at least:
+
+| Variable | Example |
+|----------|---------|
+| `SUPPORTHUB_DATABASE_URL` | `postgresql+psycopg://postgres:medeveloper@127.0.0.1:5432/supporthub` |
+| `SUPPORTHUB_BOOTSTRAP_ADMIN_PASSWORD` | your ADMIN password (used once on first app start) |
+| `SUPPORTHUB_HOST` / `SUPPORTHUB_PORT` | `127.0.0.1` / `8888` |
+
+**2. Python environment**
+
+```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### 2. Database
+**3. Database schema** (pick one)
 
 ```bat
 cd db
 apply.bat
+cd ..
 ```
 
-Or let `init_db()` create tables on first app start.
+Or skip — `init_db()` creates tables when the app starts.
 
-### 3. Master data + ADMIN
+**4. Master data** (once)
 
-```bat
+```powershell
 python -m python.master_data
 ```
 
-Set `SUPPORTHUB_BOOTSTRAP_ADMIN_PASSWORD` in `.env` before first app start for `ADMIN` user.
-
-### 4. Start app
+**5. Start app** (creates `ADMIN` user if missing, using `SUPPORTHUB_BOOTSTRAP_ADMIN_PASSWORD`)
 
 ```powershell
+cd d:\project\supporthub
+.\venv\Scripts\Activate.ps1
 python -m uvicorn python.server_app:app --host 127.0.0.1 --port 8888
 ```
 
-Host/port can match `.env` (`SUPPORTHUB_HOST`, `SUPPORTHUB_PORT`).
+**6. Open browser**
 
-Open http://127.0.0.1:8888/
+- App: http://127.0.0.1:8888/
+- Login: http://127.0.0.1:8888/login  
+  - Username: `ADMIN`  
+  - Password: value of `SUPPORTHUB_BOOTSTRAP_ADMIN_PASSWORD` in `.env`
+
+---
+
+### Every day (after setup)
+
+```powershell
+cd d:\project\supporthub
+.\venv\Scripts\Activate.ps1
+
+# 1) Start PostgreSQL (Docker container, etc.)
+# 2) Start app
+python -m uvicorn python.server_app:app --host 127.0.0.1 --port 8888
+```
+
+Use host/port from `.env` if you changed them.
+
+**Dev mode** (auto-reload on code change):
+
+```powershell
+python -m uvicorn python.server_app:app --host 127.0.0.1 --port 8888 --reload
+```
+
+---
+
+### Production (Windows + IIS)
+
+1. Run Uvicorn bound to `127.0.0.1:8888` (same command as above).
+2. Deploy `web.config` in IIS — reverse proxy to Uvicorn (no secrets in `web.config`; use `.env` on the server).
+
+---
+
+### Troubleshooting
+
+| Problem | What to check |
+|---------|----------------|
+| `SUPPORTHUB_DATABASE_URL is required` | `.env` exists in project root; restart terminal after editing |
+| DB connection error | PostgreSQL running; URL/user/password/database name in `.env` |
+| Login fails for `ADMIN` | User created on first start — delete `ADMIN` in `users` table and restart app, or fix password in DB |
+| Empty dropdowns (Line/Machine) | Run `python -m python.master_data` |
+| Template error after upgrade | Restart app (uses `_TemplatesCompat` for Starlette 1.x) |
 
 ---
 
@@ -242,18 +308,65 @@ Open http://127.0.0.1:8888/
 
 ```mermaid
 flowchart TB
-    Browser --> IIS["IIS web.config optional"]
-    IIS --> Uvicorn["Uvicorn"]
-    Uvicorn --> FastAPI["python/app.py"]
-    FastAPI --> Routes["routes/sections/*"]
-    FastAPI --> Jinja["html/"]
-    Routes --> PG[(PostgreSQL)]
-    FastAPI --> IoT["MQTT thread"]
-    IoT --> PG
-    FastAPI --> JSON["monitoring_line_map.json"]
-    Routes --> LINE["LINE Notify"]
-    Env[".env"] --> Settings["python/settings.py"]
-    Settings --> FastAPI
+    subgraph config [Config]
+        ENV[".env"]
+        LOAD["load_env.py"]
+        SET["settings.py"]
+        ENV --> LOAD --> SET
+    end
+
+    subgraph entry [App entry]
+        SRV["server_app.py"]
+        APP["app.py"]
+        DBINIT["init_db()"]
+        SRV --> APP --> DBINIT
+        SET --> APP
+    end
+
+    subgraph client [Client]
+        Browser["Browser"]
+        IIS["IIS web.config optional"]
+        UV["Uvicorn SUPPORTHUB_HOST:PORT"]
+        Browser --> IIS --> UV
+        Browser -.->|dev direct| UV
+        UV --> SRV
+    end
+
+    subgraph http [HTTP layer]
+        WR["web_routes.py"]
+        SEC["sections: auth | tickets | admin | history-oee-iot"]
+        HTML["html/ templates"]
+        APP --> WR --> SEC --> HTML
+    end
+
+    subgraph storage [Storage]
+        PG[(PostgreSQL)]
+        JSON["monitoring_line_map.json"]
+        SEC --> PG
+        DBINIT --> PG
+        APP --> JSON
+        DBINIT -. sync .-> PG
+    end
+
+    subgraph iot [IoT]
+        MQTT["MQTT broker"]
+        IOT["iot_monitor_service"]
+        APP -->|startup thread| IOT
+        MQTT --> IOT
+        IOT --> PG
+    end
+
+    subgraph optional [Optional]
+        LINE["LINE Notify API"]
+        SEC --> LINE
+    end
+
+    subgraph setup [One-time setup]
+        SQL["db/apply.bat + *.sql"]
+        SEED["python -m python.master_data"]
+        SQL --> PG
+        SEED --> PG
+    end
 ```
 
 ---
