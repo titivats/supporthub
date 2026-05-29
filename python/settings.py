@@ -55,7 +55,8 @@ PORT = _get_int("SUPPORTHUB_PORT", 8888)
 # LINE Notify (optional)
 LINE_NOTIFY_TOKEN = _get("LINE_NOTIFY_TOKEN")
 
-# MQTT / IoT
+# MQTT / IoT (set SUPPORTHUB_MQTT_ENABLED=false if broker is unreachable)
+MQTT_ENABLED = _get_bool("SUPPORTHUB_MQTT_ENABLED", True)
 MQTT_HOST = _get("SUPPORTHUB_MQTT_HOST", "192.168.1.109")
 MQTT_PORT = _get_int("SUPPORTHUB_MQTT_PORT", 1883)
 MQTT_TOPIC = _get("SUPPORTHUB_MQTT_TOPIC", "power/pzem")

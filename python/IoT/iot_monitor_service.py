@@ -13,6 +13,7 @@ from python.db import SessionLocal, engine
 from python.settings import (
     IOT_SAMPLE_LIMIT,
     MQTT_CLIENT_ID,
+    MQTT_ENABLED,
     MQTT_HOST,
     MQTT_PORT,
     MQTT_TOPIC,
@@ -245,8 +246,11 @@ class IoTMonitorService:
         with self._lock:
             if self._started:
                 return
-            self._started = True
             self.last_error = ""
+
+            if not MQTT_ENABLED:
+                self.last_error = "MQTT disabled (SUPPORTHUB_MQTT_ENABLED=false)"
+                return
 
             if mqtt is None:
                 self.last_error = "Missing dependency: paho-mqtt"
@@ -268,8 +272,11 @@ class IoTMonitorService:
                 self._client.on_message = self._on_message
                 self._client.connect_async(self.host, self.port, keepalive=30)
                 self._client.loop_start()
+                self._started = True
             except Exception as exc:
+                self._client = None
                 self.last_error = f"MQTT setup failed: {exc}"
+                print(f"[IOT] {self.last_error}")
 
     def stop(self) -> None:
         with self._lock:

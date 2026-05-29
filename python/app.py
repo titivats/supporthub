@@ -81,7 +81,10 @@ templates = _TemplatesCompat("html")
 
 @app.on_event("startup")
 def on_startup() -> None:
-    iot_monitor.start()
+    try:
+        iot_monitor.start()
+    except Exception as exc:
+        print(f"[IOT] startup error (app continues): {exc}")
 
 
 @app.on_event("shutdown")

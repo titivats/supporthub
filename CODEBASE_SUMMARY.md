@@ -36,6 +36,7 @@ No frontend build step or JS framework — plain HTML/CSS/JS in templates.
 | `.env` | Local config (not in git) — copy from `.env.example` |
 | `web.config` | IIS reverse proxy only (no secrets) |
 | `requirements.txt` | Python dependencies |
+| `service/` | Windows service install scripts (NSSM) |
 
 ---
 
@@ -366,6 +367,12 @@ flowchart TB
         SEED["python -m python.master_data"]
         SQL --> PG
         SEED --> PG
+    end
+
+    subgraph winsvc [Windows Service optional]
+        NSSM["NSSM install_service.bat"]
+        SVC["SupportHub service"]
+        NSSM --> SVC --> UV
     end
 ```
 
