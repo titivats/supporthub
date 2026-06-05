@@ -26,6 +26,7 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
     _build_monitoring_line_chart_metrics = ctx["_build_monitoring_line_chart_metrics"]
     iot_monitor = ctx["iot_monitor"]
     get_current_user = ctx["get_current_user"]
+    BASE_URL = ctx["BASE_URL"]
 
     def _query_done_or_cancel(db: Session,
                               line_op: Optional[str] = None,
@@ -95,22 +96,8 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
             out.setdefault(row.ticket_id, []).append(row)
         return out
 
-    @app.get("/history", response_class=HTMLResponse)
-    def history(request: Request,
-                line_op: Optional[str] = Query(None),
-                machine_type: Optional[str] = Query(None),
-                machine_brand: Optional[str] = Query(None),
-                machine_id: Optional[str] = Query(None),
-                problem: Optional[str] = Query(None),
-                equipment: Optional[str] = Query(None),  # backward-compatible query param
-                start_date: Optional[str] = Query(None),
-                end_date: Optional[str] = Query(None),
-                db: Session = Depends(get_db)):
-        try:
-            user = get_current_user(request, db)
-        except HTTPException:
-            return RedirectResponse("/login", status_code=302)
-
+    def _filter_history_rows(db, line_op, machine_type, machine_brand, equipment,
+                              machine_id, problem, start_date, end_date, master):
         start_utc = end_utc = None
         try:
             if start_date:
@@ -118,9 +105,8 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
             if end_date:
                 end_utc = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d").date(), time.max) - TH_OFFSET
         except Exception:
-            start_utc = end_utc = None
+            pass
 
-        master = _build_master_data(db)
         machine_type_val, machine_brand_val = _normalize_history_filters(machine_type, machine_brand, equipment)
         machine_id_val = (machine_id or "").strip()
         problem_val = (problem or "").strip()
@@ -133,10 +119,42 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
             rows = [t for t in rows if ((t.machine_id or "").strip().lower() == machine_id_val.lower())]
         if problem_val:
             rows = [t for t in rows if ((t.problem or "").strip().lower() == problem_val.lower())]
-        takeover_logs_map = _build_takeover_logs_map(db, [t.id for t in rows])
-        total_doing = sum((t.doing_secs or 0) for t in rows)
-        total_hold = sum((t.hold_secs or 0) for t in rows)
+        return rows, machine_type_val, machine_brand_val, machine_id_val, problem_val, machine_id_options, problem_options
+
+    @app.get("/history", response_class=HTMLResponse)
+    def history(request: Request,
+                line_op: Optional[str] = Query(None),
+                machine_type: Optional[str] = Query(None),
+                machine_brand: Optional[str] = Query(None),
+                machine_id: Optional[str] = Query(None),
+                problem: Optional[str] = Query(None),
+                equipment: Optional[str] = Query(None),
+                start_date: Optional[str] = Query(None),
+                end_date: Optional[str] = Query(None),
+                page: int = Query(1, ge=1),
+                page_size: int = Query(50),
+                db: Session = Depends(get_db)):
+        try:
+            user = get_current_user(request, db)
+        except HTTPException:
+            return RedirectResponse(f"{BASE_URL}/login", status_code=302)
+
+        page_size = max(10, min(page_size, 500))
+        master = _build_master_data(db)
+        all_rows, machine_type_val, machine_brand_val, machine_id_val, problem_val, machine_id_options, problem_options = \
+            _filter_history_rows(db, line_op, machine_type, machine_brand, equipment,
+                                 machine_id, problem, start_date, end_date, master)
+
+        total = len(all_rows)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        page = max(1, min(page, total_pages))
+        offset = (page - 1) * page_size
+        rows = all_rows[offset:offset + page_size]
+
+        total_doing = sum((t.doing_secs or 0) for t in all_rows)
+        total_hold = sum((t.hold_secs or 0) for t in all_rows)
         summary = {"doing": _fmt_hms(total_doing), "hold": _fmt_hms(total_hold)}
+        takeover_logs_map = _build_takeover_logs_map(db, [t.id for t in rows])
 
         return templates.TemplateResponse("history.html", {
             "request": request,
@@ -156,7 +174,90 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
             "start_date": start_date or "",
             "end_date": end_date or "",
             "fmt_th": fmt_th,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
         })
+
+    @app.get("/api/history")
+    def api_history(request: Request,
+                    line_op: Optional[str] = Query(None),
+                    machine_type: Optional[str] = Query(None),
+                    machine_brand: Optional[str] = Query(None),
+                    machine_id: Optional[str] = Query(None),
+                    problem: Optional[str] = Query(None),
+                    equipment: Optional[str] = Query(None),
+                    start_date: Optional[str] = Query(None),
+                    end_date: Optional[str] = Query(None),
+                    page: int = Query(1, ge=1),
+                    page_size: int = Query(50),
+                    db: Session = Depends(get_db)):
+        try:
+            get_current_user(request, db)
+        except HTTPException:
+            from fastapi import HTTPException as _HTTP
+            raise _HTTP(status_code=401, detail="Unauthorized")
+
+        page_size = max(10, min(page_size, 500))
+        master = _build_master_data(db)
+        all_rows, *_ = _filter_history_rows(db, line_op, machine_type, machine_brand, equipment,
+                                            machine_id, problem, start_date, end_date, master)
+
+        total = len(all_rows)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        page = max(1, min(page, total_pages))
+        offset = (page - 1) * page_size
+        rows = all_rows[offset:offset + page_size]
+        takeover_logs_map = _build_takeover_logs_map(db, [t.id for t in rows])
+
+        def _fmt_dt(dt):
+            return fmt_th(dt) if dt else None
+
+        def _serialize(t):
+            sum_secs = int((t.closed_at - t.created_at).total_seconds()) if t.closed_at and t.created_at else 0
+            doing = t.doing_secs or 0
+            hold = t.hold_secs or 0
+            wait_secs = max(0, sum_secs - doing - hold)
+            logs = [
+                {"created_at": _fmt_dt(lg.created_at), "from_actor": lg.from_actor, "to_actor": lg.to_actor}
+                for lg in takeover_logs_map.get(t.id, [])
+            ]
+            return {
+                "id": t.id,
+                "status": t.status,
+                "created_at": _fmt_dt(t.created_at),
+                "closed_at": _fmt_dt(t.closed_at),
+                "requester": t.requester,
+                "line_no": t.machine,
+                "machine": t.history_machine or "",
+                "machine_type": t.history_machine_type or "",
+                "machine_id": t.machine_id or "",
+                "problem": t.problem or "",
+                "description": t.description or "",
+                "doing_secs": doing,
+                "hold_secs": hold,
+                "wait_secs": wait_secs,
+                "downtime_secs": sum_secs,
+                "doing_hms": _fmt_hms(doing),
+                "hold_hms": _fmt_hms(hold),
+                "wait_hms": _fmt_hms(wait_secs),
+                "downtime_hms": _fmt_hms(sum_secs),
+                "hold_reason": t.hold_reason or "",
+                "solution": t.solution or "",
+                "cancel_reason": t.cancel_reason or "",
+                "done_by": t.done_by or "",
+                "canceled_by": t.canceled_by or "",
+                "takeover_logs": logs,
+            }
+
+        return {
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "items": [_serialize(t) for t in rows],
+        }
 
     @app.get("/export/excel")
     def export_excel(request: Request,
@@ -172,7 +273,7 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
         try:
             _ = get_current_user(request, db)
         except HTTPException:
-            return RedirectResponse("/login", status_code=302)
+            return RedirectResponse(f"{BASE_URL}/login", status_code=302)
 
         import xlsxwriter
 
@@ -318,7 +419,7 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
         try:
             user = get_current_user(request, db)
         except HTTPException:
-            return RedirectResponse("/login", status_code=302)
+            return RedirectResponse(f"{BASE_URL}/login", status_code=302)
 
         master = _build_master_data(db)
         machine_type_val, machine_brand_val = _normalize_history_filters(machine_type, machine_brand, equipment)
@@ -407,7 +508,7 @@ def register_history_monitoring_iot_routes(app, templates, ctx):
         try:
             user = get_current_user(request, db)
         except HTTPException:
-            return RedirectResponse("/login", status_code=302)
+            return RedirectResponse(f"{BASE_URL}/login", status_code=302)
         return templates.TemplateResponse("IoT/iot_monitor.html", {
             "request": request,
             "user": user,

@@ -5,7 +5,7 @@ import json
 import threading
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 
 from sqlalchemy.orm import Session
 
@@ -41,9 +41,10 @@ from python.time_utils import TH_OFFSET, fmt_hms as _fmt_hms, fmt_th
 
 from python.IoT.iot_monitor_service import iot_monitor
 from python.master_data import EQUIPMENTS, MASTER_STATUS_TEXT
-from python.settings import LINE_MACHINE_MAP_FILE
+from python.settings import BASE_URL, LINE_MACHINE_MAP_FILE
 
 app = FastAPI(title="SupportHub")
+router = APIRouter(prefix=BASE_URL)
 from fastapi.templating import Jinja2Templates
 class _TemplatesCompat:
     """Wrap Jinja2Templates for Starlette 0.36+ (request is first arg)."""
@@ -77,6 +78,7 @@ class _TemplatesCompat:
 
 
 templates = _TemplatesCompat("html")
+templates._inner.env.globals["base_url"] = BASE_URL
 
 
 @app.on_event("startup")
@@ -107,7 +109,7 @@ def current_active_version():
     with _ACTIVE_LOCK:
         return ACTIVE_VERSION
 
-@app.get("/api/active/version")
+@router.get("/api/active/version")
 def api_active_version():
     # Used by index.html polling script for lightweight active-ticket refresh.
     return {"version": current_active_version()}
@@ -493,7 +495,7 @@ def _get_master_rows_sorted(db: Session, sort_time: str) -> Dict[str, list]:
 from python.routes.web_routes import register_web_routes
 
 register_web_routes(
-    app,
+    router,
     templates,
     {
         "get_db": get_db,
@@ -534,3 +536,5 @@ register_web_routes(
         "iot_monitor": iot_monitor,
     },
 )
+
+app.include_router(router)

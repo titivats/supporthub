@@ -72,6 +72,7 @@ All app settings are in **`.env`**. See `.env.example` for the full list.
 | `SUPPORTHUB_SECURE_COOKIES` | `true` / `false` |
 | `SUPPORTHUB_HOST` | Uvicorn bind host (default `127.0.0.1`) |
 | `SUPPORTHUB_PORT` | Uvicorn bind port (default `8888`) |
+| `SUPPORTHUB_BASE_URL` | URL prefix for all routes (default `/supporthub`) |
 | `SUPPORTHUB_LINE_MACHINE_MAP_FILE` | Path to line→monitoring JSON (empty = default under `database/`) |
 | `LINE_NOTIFY_TOKEN` | LINE Notify bearer token (optional) |
 | `SUPPORTHUB_MQTT_HOST` | MQTT broker host |
@@ -218,8 +219,8 @@ python -m uvicorn python.server_app:app --host 127.0.0.1 --port 8888
 
 **6. Open browser**
 
-- App: http://127.0.0.1:8888/
-- Login: http://127.0.0.1:8888/login  
+- App: http://127.0.0.1:8888/supporthub
+- Login: http://127.0.0.1:8888/supporthub/login  
   - Username: `ADMIN`  
   - Password: value of `SUPPORTHUB_BOOTSTRAP_ADMIN_PASSWORD` in `.env`
 
@@ -295,13 +296,17 @@ python -m uvicorn python.server_app:app --host 127.0.0.1 --port 8888 --reload
 
 ## Routes (summary)
 
+All routes are prefixed with `SUPPORTHUB_BASE_URL` (default `/supporthub`).
+
 | Area | Examples |
 |------|----------|
-| Auth | `GET/POST /login`, `/logout`, `/signup` |
-| Tickets | `GET /`, `POST /request/create`, `POST /tickets/{id}/action` |
-| History / OEE / IoT | `/history`, `/export/excel`, `/monitoring`, `/iot-monitor`, `/api/iot-monitor/status` |
-| Polling | `GET /api/active/version` |
-| Admin | `/admin/users`, `/admin/machines` (+ CRUD POST routes) |
+| Auth | `GET/POST /supporthub/login`, `/supporthub/logout`, `/supporthub/signup` |
+| Tickets | `GET /supporthub/`, `POST /supporthub/request/create`, `POST /supporthub/tickets/{id}/action` |
+| History | `GET /supporthub/history?page=1&page_size=50&...filters`, `GET /supporthub/export/excel` |
+| History API | `GET /supporthub/api/history?page=1&page_size=50&...filters` → JSON `{total, page, page_size, total_pages, items[]}` |
+| OEE / IoT | `/supporthub/monitoring`, `/supporthub/iot-monitor`, `/supporthub/api/iot-monitor/status` |
+| Polling | `GET /supporthub/api/active/version` |
+| Admin | `/supporthub/admin/users`, `/supporthub/admin/machines` (+ CRUD POST routes) |
 
 ---
 
@@ -388,6 +393,8 @@ flowchart TB
 6. Real-time ticket list: `ACTIVE_VERSION` + poll `/api/active/version`.
 7. Display times use Thailand UTC+7 (`python/time_utils.py`).
 8. Roles: Operator, Engineer, Technician, Admin. Public signup allows non-admin roles only; non-admin usernames must be exactly 6 digits.
+9. Base URL prefix (`SUPPORTHUB_BASE_URL`, default `/supporthub`) applied via `APIRouter(prefix=BASE_URL)` in `app.py`; Jinja2 global `base_url` makes it available in all templates; all `RedirectResponse` calls in routes use it too.
+10. History page is server-side paginated (`page`, `page_size` query params, default 50 rows/page). `GET /supporthub/api/history` is a JSON API with the same filters and pagination returning `{total, page, page_size, total_pages, items[]}`.
 
 ---
 

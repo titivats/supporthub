@@ -51,6 +51,7 @@ SECURE_COOKIES = _get_bool(
 # Server (uvicorn)
 HOST = _get("SUPPORTHUB_HOST", "127.0.0.1")
 PORT = _get_int("SUPPORTHUB_PORT", 8888)
+BASE_URL = _get("SUPPORTHUB_BASE_URL", "/supporthub")
 
 # LINE Notify (optional)
 LINE_NOTIFY_TOKEN = _get("LINE_NOTIFY_TOKEN")

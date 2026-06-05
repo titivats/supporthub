@@ -244,7 +244,7 @@
     </div>
     <div class="actions">
       <button class="btn" type="button" onclick="goBack()">Back</button>
-      <a class="btn" href="/logout">Logout</a>
+      <a class="btn" href="{{ base_url }}/logout">Logout</a>
     </div>
   </div>
 
@@ -312,7 +312,7 @@
   };
 
   function goBack(){
-    window.location.href = "/";
+    window.location.href = "{{ base_url }}";
   }
 
   function formatNumber(v){
@@ -416,7 +416,7 @@
   async function loadStatus(){
     const errBox = document.getElementById("errBox");
     try{
-      const res = await fetch("/api/iot-monitor/status", { cache: "no-store" });
+      const res = await fetch("{{ base_url }}/api/iot-monitor/status", { cache: "no-store" });
       if (!res.ok){
         throw new Error(`HTTP ${res.status}`);
       }

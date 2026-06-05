@@ -353,12 +353,12 @@
       </div>
       <div class="actions">
         <button class="btn" type="button" onclick="goBack()">Back</button>
-        <a class="btn logout" href="/logout">Logout</a>
+        <a class="btn logout" href="{{ base_url }}/logout">Logout</a>
       </div>
     </div>
   </div>
 
-  <form class="card filter-card" method="get" action="/monitoring">
+  <form class="card filter-card" method="get" action="{{ base_url }}/monitoring">
     <p class="filter-title">Filter Criteria (OEE + Key Metrics)</p>
     <input type="hidden" name="line_support_area" value="{{ line_support_area or '' }}">
     <input type="hidden" name="line_start_date" value="{{ line_start_date or '' }}">
@@ -488,7 +488,7 @@
       </div>
     </div>
 
-    <form id="lineFilterCard" class="line-filter-card" method="get" action="/monitoring">
+    <form id="lineFilterCard" class="line-filter-card" method="get" action="{{ base_url }}/monitoring">
       <input type="hidden" name="line_op" value="{{ line_op or '' }}">
       <input type="hidden" name="machine_type" value="{{ machine_type or '' }}">
       <input type="hidden" name="machine_brand" value="{{ machine_brand or '' }}">
@@ -999,7 +999,7 @@
   });
 
   function goBack(){
-    window.location.href = "/";
+    window.location.href = "{{ base_url }}";
   }
 </script>
 </body>

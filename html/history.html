@@ -66,6 +66,12 @@
     tbody tr.row-selected{background:#e0f2fe !important; box-shadow: inset 0 0 0 2px #bae6fd;}
     .id-btn{all:unset; cursor:pointer; color:#2563eb; font-weight:600;}
     .id-btn:hover{text-decoration:underline;}
+    .pagination{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line);background:#fafafa}
+    .pagination .info{font-size:13px;color:var(--muted);margin-right:auto}
+    .page-size-sel{padding:5px 8px;border:1px solid #d7d9e0;border-radius:8px;font-size:13px}
+    .btn.sm{padding:5px 10px;font-size:13px}
+    .btn.active-page{background:#2563eb;color:#fff;border-color:#1f5fe6}
+    .btn[disabled]{opacity:.4;cursor:default;pointer-events:none}
   </style>
 </head>
 <body>
@@ -75,11 +81,11 @@
     <div class="top-actions">
       <button class="btn" type="button" id="exportBtn">Export Excel</button>
       <button class="btn" type="button" onclick="goBack()">Back</button>
-      <a class="btn" href="/logout">Logout</a>
+      <a class="btn" href="{{ base_url }}/logout">Logout</a>
     </div>
   </div>
 
-  <form id="filterForm" class="filters" method="get" action="/history">
+  <form id="filterForm" class="filters" method="get" action="{{ base_url }}/history">
     <div class="filters-row">
       <label>Line No.
         <select name="line_op" id="filterLine">
@@ -234,6 +240,41 @@
         </tbody>
       </table>
     </div>
+
+    {# Pagination #}
+    {% set qs_base %}line_op={{ line_op }}&machine_type={{ machine_type }}&machine_brand={{ machine_brand }}&machine_id={{ machine_id }}&problem={{ problem }}&start_date={{ start_date }}&end_date={{ end_date }}&page_size={{ page_size }}{% endset %}
+    <div class="pagination">
+      <span class="info">
+        {% if total == 0 %}No records{% else %}
+          Showing {{ (page-1)*page_size + 1 }}–{{ [page*page_size, total]|min }} of {{ total }} records
+        {% endif %}
+        &nbsp;·&nbsp; Summary: Doing {{ summary.doing }} / Hold {{ summary.hold }}
+      </span>
+
+      <label style="font-size:13px;color:var(--muted)">Rows
+        <select class="page-size-sel" id="pageSizeSel">
+          {% for sz in [25, 50, 100, 200] %}
+            <option value="{{ sz }}" {% if page_size==sz %}selected{% endif %}>{{ sz }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <a class="btn sm {% if page <= 1 %}{% endif %}" href="?{{ qs_base }}&page=1" {% if page <= 1 %}disabled{% endif %}>«</a>
+      <a class="btn sm" href="?{{ qs_base }}&page={{ [page-1,1]|max }}" {% if page <= 1 %}disabled{% endif %}>‹</a>
+
+      {% set win = 2 %}
+      {% set ns = namespace(last_shown=0) %}
+      {% for p in range(1, total_pages+1) %}
+        {% if p == 1 or p == total_pages or (p >= page-win and p <= page+win) %}
+          {% if ns.last_shown and p - ns.last_shown > 1 %}<span style="color:var(--muted);padding:0 4px">…</span>{% endif %}
+          <a class="btn sm {% if p == page %}active-page{% endif %}" href="?{{ qs_base }}&page={{ p }}">{{ p }}</a>
+          {% set ns.last_shown = p %}
+        {% endif %}
+      {% endfor %}
+
+      <a class="btn sm" href="?{{ qs_base }}&page={{ [page+1,total_pages]|min }}" {% if page >= total_pages %}disabled{% endif %}>›</a>
+      <a class="btn sm" href="?{{ qs_base }}&page={{ total_pages }}" {% if page >= total_pages %}disabled{% endif %}>»</a>
+    </div>
   </div>
 </div>
 
@@ -301,7 +342,14 @@ selType.addEventListener('change', ()=>{
 });
 
 document.getElementById('btnClear').addEventListener('click', ()=>{
-  window.location.href = '/history';
+  window.location.href = '{{ base_url }}/history';
+});
+
+document.getElementById('pageSizeSel').addEventListener('change', function(){
+  const params = buildHistoryParams();
+  params.set('page_size', this.value);
+  params.set('page', '1');
+  window.location.href = '{{ base_url }}/history?' + params.toString();
 });
 
 function buildHistoryParams(){
@@ -313,6 +361,7 @@ function buildHistoryParams(){
   const problem = (selProblem.value || '').trim();
   const startDate = (startInp.value || '').trim();
   const endDate = (endInp.value || '').trim();
+  const pageSize = (document.getElementById('pageSizeSel').value || '50').trim();
 
   if(line) params.set('line_op', line);
   if(machineType) params.set('machine_type', machineType);
@@ -321,12 +370,13 @@ function buildHistoryParams(){
   if(problem) params.set('problem', problem);
   if(startDate) params.set('start_date', startDate);
   if(endDate) params.set('end_date', endDate);
+  params.set('page_size', pageSize);
   return params;
 }
 
 btnExport.addEventListener('click', ()=>{
   const params = buildHistoryParams();
-  window.location.href = `/export/excel?${params.toString()}`;
+  window.location.href = `{{ base_url }}/export/excel?${params.toString()}`;
 });
 
 populateBrandOptions();
@@ -347,7 +397,7 @@ tbody.addEventListener('click', (e)=>{
 </script>
 <script>
 function goBack(){
-  window.location.href = "/";
+  window.location.href = "{{ base_url }}";
 }
 </script>
 </body>

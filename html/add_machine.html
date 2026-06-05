@@ -338,8 +338,8 @@
       <div class="lead">Manage dropdown values used in Active Tickets: Support Area, Line No., Machine, Machine Type, Machine ID, and Problem.</div>
     </div>
     <div class="actions">
-      <a class="btn" href="/">Back</a>
-      <a class="btn" href="/logout">Logout</a>
+      <a class="btn" href="{{ base_url }}">Back</a>
+      <a class="btn" href="{{ base_url }}/logout">Logout</a>
     </div>
   </div>
 
@@ -358,7 +358,7 @@
             <div class="mini-card">
               <h4>Add Line No.</h4>
               <div class="note">Example: BT10, PACKING-2</div>
-              <form class="form-row" method="post" action="/admin/machines/add-line">
+              <form class="form-row" method="post" action="{{ base_url }}/admin/machines/add-line">
                 <div class="inline-action">
                   <div>
                     <label>Line No.</label>
@@ -372,7 +372,7 @@
             <div class="mini-card">
               <h4>Add Machine</h4>
               <div class="note">Example: Laser Marking</div>
-              <form class="form-row" method="post" action="/admin/machines/add-machine">
+              <form class="form-row" method="post" action="{{ base_url }}/admin/machines/add-machine">
                 <div class="inline-action">
                   <div>
                     <label>Machine</label>
@@ -386,7 +386,7 @@
             <div class="mini-card">
               <h4>Add Machine Type</h4>
               <div class="note">Machine Type is linked to selected Machine.</div>
-              <form class="form-row" method="post" action="/admin/machines/add-machine-type">
+              <form class="form-row" method="post" action="{{ base_url }}/admin/machines/add-machine-type">
                 <div>
                   <label>Machine</label>
                   <select name="machine" required>
@@ -417,7 +417,7 @@
             <div class="mini-card">
               <h4>Map Support Area to Machine</h4>
               <div class="note">When user selects Support Area in Active Tickets, only mapped Machines are shown.</div>
-              <form class="form-row" method="post" action="/admin/machines/add-support-area-machine">
+              <form class="form-row" method="post" action="{{ base_url }}/admin/machines/add-support-area-machine">
                 <div>
                   <label>Support Area</label>
                   <select name="support_area" required>
@@ -445,7 +445,7 @@
             <div class="mini-card">
               <h4>Add Support Area</h4>
               <div class="note">Example: Backline, Inspection, Coating & Robotic, Rework or custom area.</div>
-              <form class="form-row" method="post" action="/admin/machines/add-support-area">
+              <form class="form-row" method="post" action="{{ base_url }}/admin/machines/add-support-area">
                 <div class="inline-action">
                   <div>
                     <label>Support Area</label>
@@ -459,7 +459,7 @@
             <div class="mini-card">
               <h4>Add Machine ID</h4>
               <div class="note">Machine ID is linked to Machine + Machine Type.</div>
-              <form class="form-row" method="post" action="/admin/machines/add-machine-id">
+              <form class="form-row" method="post" action="{{ base_url }}/admin/machines/add-machine-id">
                 <div>
                   <label>Machine</label>
                   <select name="machine" id="add-machine-id-machine" required>
@@ -488,7 +488,7 @@
             <div class="mini-card">
               <h4>Map Line to Monitoring Page</h4>
               <div class="note">Use this mapping in Monitoring chart by line with Machine Type + optional Machine ID.</div>
-              <form class="form-row" id="line-monitoring-map-form" method="post" action="/admin/machines/add-line-machine">
+              <form class="form-row" id="line-monitoring-map-form" method="post" action="{{ base_url }}/admin/machines/add-line-machine">
                 <div>
                   <label>Line No.</label>
                   <select name="line_no" required>
@@ -528,7 +528,7 @@
             <div class="mini-card">
               <h4>Add Problem</h4>
               <div class="note">If Machine Type is blank, problem will be available at Machine level.</div>
-              <form class="form-row" method="post" action="/admin/machines/add-problem">
+              <form class="form-row" method="post" action="{{ base_url }}/admin/machines/add-problem">
                 <div>
                   <label>Machine</label>
                   <select name="machine" id="add-problem-machine" required>
@@ -565,7 +565,7 @@
         <div class="section-note">Current values in the system. Each table shows up to 5 rows and can scroll for more. Click column header to sort, use Delete to remove items, and check Update History to see who added/deleted data.</div>
       </div>
       <div class="section-tools">
-        <a class="btn primary" href="/admin/machines/export/excel">Export Excel</a>
+        <a class="btn primary" href="{{ base_url }}/admin/machines/export/excel">Export Excel</a>
       </div>
     </div>
     <div class="data-tabs" id="master-data-tabs">
@@ -592,7 +592,7 @@
                   <td data-sort="{{ (r.support_area or '')|lower }}">{{ r.support_area }}</td>
                   <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
                   <td class="action-cell" data-sort="delete">
-                    <form method="post" action="/admin/machines/delete-support-area" onsubmit="return confirm('Delete this Support Area and all linked mappings?');">
+                    <form method="post" action="{{ base_url }}/admin/machines/delete-support-area" onsubmit="return confirm('Delete this Support Area and all linked mappings?');">
                       <input type="hidden" name="support_area_id" value="{{ r.id }}">
                       <button class="btn danger sm" type="submit">Delete</button>
                     </form>
@@ -619,7 +619,7 @@
                   <td data-sort="{{ (r.machine or '')|lower }}">{{ r.machine }}</td>
                   <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
                   <td class="action-cell" data-sort="delete">
-                    <form method="post" action="/admin/machines/delete-support-area-machine" onsubmit="return confirm('Delete this mapping?');">
+                    <form method="post" action="{{ base_url }}/admin/machines/delete-support-area-machine" onsubmit="return confirm('Delete this mapping?');">
                       <input type="hidden" name="map_id" value="{{ r.id }}">
                       <button class="btn danger sm" type="submit">Delete</button>
                     </form>
@@ -646,7 +646,7 @@
                   <td data-sort="{{ (r.monitoring_item or '')|lower }}">{{ r.monitoring_item }}</td>
                   <td data-sort="{{ (r.machine_id or '')|lower }}">{{ r.machine_id or '-' }}</td>
                   <td class="action-cell" data-sort="delete">
-                    <form method="post" action="/admin/machines/delete-line-machine" onsubmit="return confirm('Delete this line-monitoring mapping?');">
+                    <form method="post" action="{{ base_url }}/admin/machines/delete-line-machine" onsubmit="return confirm('Delete this line-monitoring mapping?');">
                       <input type="hidden" name="line_no" value="{{ r.line_no }}">
                       <input type="hidden" name="monitoring_item" value="{{ r.raw_value or r.monitoring_item }}">
                       <button class="btn danger sm" type="submit">Delete</button>
@@ -673,7 +673,7 @@
                   <td data-sort="{{ (r.line_no or '')|lower }}">{{ r.line_no }}</td>
                   <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
                   <td class="action-cell" data-sort="delete">
-                    <form method="post" action="/admin/machines/delete-line" onsubmit="return confirm('Delete this Line No.?');">
+                    <form method="post" action="{{ base_url }}/admin/machines/delete-line" onsubmit="return confirm('Delete this Line No.?');">
                       <input type="hidden" name="line_id" value="{{ r.id }}">
                       <button class="btn danger sm" type="submit">Delete</button>
                     </form>
@@ -699,7 +699,7 @@
                   <td data-sort="{{ (r.machine or '')|lower }}">{{ r.machine }}</td>
                   <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
                   <td class="action-cell" data-sort="delete">
-                    <form method="post" action="/admin/machines/delete-machine" onsubmit="return confirm('Delete this Machine and all linked Machine Type, Machine ID, Problem, and Support Area mapping data?');">
+                    <form method="post" action="{{ base_url }}/admin/machines/delete-machine" onsubmit="return confirm('Delete this Machine and all linked Machine Type, Machine ID, Problem, and Support Area mapping data?');">
                       <input type="hidden" name="machine_row_id" value="{{ r.id }}">
                       <button class="btn danger sm" type="submit">Delete</button>
                     </form>
@@ -726,7 +726,7 @@
                   <td data-sort="{{ (r.machine_type or '')|lower }}">{{ r.machine_type }}</td>
                   <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
                   <td class="action-cell" data-sort="delete">
-                    <form method="post" action="/admin/machines/delete-machine-type" onsubmit="return confirm('Delete this Machine Type and all linked Machine ID and Problem data?');">
+                    <form method="post" action="{{ base_url }}/admin/machines/delete-machine-type" onsubmit="return confirm('Delete this Machine Type and all linked Machine ID and Problem data?');">
                       <input type="hidden" name="machine_type_id" value="{{ r.id }}">
                       <button class="btn danger sm" type="submit">Delete</button>
                     </form>
@@ -754,7 +754,7 @@
                   <td data-sort="{{ (r.machine_id or '')|lower }}">{{ r.machine_id }}</td>
                   <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
                   <td class="action-cell" data-sort="delete">
-                    <form method="post" action="/admin/machines/delete-machine-id" onsubmit="return confirm('Delete this Machine ID?');">
+                    <form method="post" action="{{ base_url }}/admin/machines/delete-machine-id" onsubmit="return confirm('Delete this Machine ID?');">
                       <input type="hidden" name="machine_id_row_id" value="{{ r.id }}">
                       <button class="btn danger sm" type="submit">Delete</button>
                     </form>
@@ -782,7 +782,7 @@
                   <td data-sort="{{ (r.problem or '')|lower }}">{{ r.problem }}</td>
                   <td class="muted" data-sort="{{ r.created_at.isoformat() if r.created_at else '' }}">{{ fmt_th(r.created_at) }}</td>
                   <td class="action-cell" data-sort="delete">
-                    <form method="post" action="/admin/machines/delete-problem" onsubmit="return confirm('Delete this Problem?');">
+                    <form method="post" action="{{ base_url }}/admin/machines/delete-problem" onsubmit="return confirm('Delete this Problem?');">
                       <input type="hidden" name="problem_id" value="{{ r.id }}">
                       <button class="btn danger sm" type="submit">Delete</button>
                     </form>

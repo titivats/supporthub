@@ -18,6 +18,7 @@ def register_auth_user_routes(app, templates, ctx):
     _is_valid_manage_password = ctx["_is_valid_manage_password"]
     _normalize_role = ctx["_normalize_role"]
     _require_admin_user = ctx["_require_admin_user"]
+    BASE_URL = ctx["BASE_URL"]
 
     @app.get("/login", response_class=HTMLResponse)
     def login_page(request: Request):
@@ -38,13 +39,13 @@ def register_auth_user_routes(app, templates, ctx):
                 status_code=400,
             )
         token = make_session_token(user.username)
-        resp = RedirectResponse("/", status_code=303)
+        resp = RedirectResponse(f"{BASE_URL}", status_code=303)
         resp.set_cookie("session", token, httponly=True, samesite="lax", secure=SECURE_COOKIES, max_age=SESSION_AGE)
         return resp
 
     @app.get("/logout")
     def logout():
-        resp = RedirectResponse("/login", status_code=303)
+        resp = RedirectResponse(f"{BASE_URL}/login", status_code=303)
         resp.delete_cookie("session")
         return resp
 
@@ -73,7 +74,7 @@ def register_auth_user_routes(app, templates, ctx):
         role = _normalize_role(role, allow_admin=False) or "Operator"
         db.add(User(username=username, password_hash=sha256(password), role=role))
         db.commit()
-        return RedirectResponse("/login?created=1", status_code=303)
+        return RedirectResponse(f"{BASE_URL}/login?created=1", status_code=303)
 
     @app.get("/admin/users", response_class=HTMLResponse)
     def admin_users(request: Request, db: Session = Depends(get_db)):
@@ -107,7 +108,7 @@ def register_auth_user_routes(app, templates, ctx):
         u = User(username=username, password_hash=sha256(password), role=role)
         db.add(u)
         db.commit()
-        return RedirectResponse("/admin/users", status_code=303)
+        return RedirectResponse(f"{BASE_URL}/admin/users", status_code=303)
 
     @app.post("/admin/users/update/{user_id}")
     def admin_update_user(user_id: int,
@@ -134,11 +135,11 @@ def register_auth_user_routes(app, templates, ctx):
             u.password_hash = sha256(new_password_val)
             db.add(u)
             db.commit()
-            return RedirectResponse("/admin/users?pw_updated=1", status_code=303)
+            return RedirectResponse(f"{BASE_URL}/admin/users?pw_updated=1", status_code=303)
 
         db.add(u)
         db.commit()
-        return RedirectResponse("/admin/users", status_code=303)
+        return RedirectResponse(f"{BASE_URL}/admin/users", status_code=303)
 
     @app.post("/admin/users/delete/{user_id}")
     def admin_delete_user(user_id: int, request: Request, db: Session = Depends(get_db)):
@@ -150,5 +151,5 @@ def register_auth_user_routes(app, templates, ctx):
             raise HTTPException(status_code=400, detail="ADMIN cannot be deleted")
         db.delete(u)
         db.commit()
-        return RedirectResponse("/admin/users", status_code=303)
+        return RedirectResponse(f"{BASE_URL}/admin/users", status_code=303)
 

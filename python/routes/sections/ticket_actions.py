@@ -18,13 +18,14 @@ def register_ticket_action_routes(app, templates, ctx):
     bump_active_version = ctx["bump_active_version"]
     EQUIPMENTS = ctx["EQUIPMENTS"]
     get_current_user = ctx["get_current_user"]
+    BASE_URL = ctx["BASE_URL"]
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request, db: Session = Depends(get_db)):
         try:
             user = get_current_user(request, db)
         except HTTPException:
-            return RedirectResponse("/login", status_code=302)
+            return RedirectResponse(f"{BASE_URL}/login", status_code=302)
 
         master = _build_master_data(db)
 
@@ -73,7 +74,7 @@ def register_ticket_action_routes(app, templates, ctx):
         db.commit()
         bump_active_version()  # important: notify Active Tickets page to refresh quickly
         line_notify(f"[REQUEST] {t.machine} | {t.equipment or '-'} | {t.machine_id or '-'} | {t.problem or '-'} by {t.requester}")
-        return RedirectResponse("/", status_code=303)
+        return RedirectResponse(f"{BASE_URL}", status_code=303)
 
     @app.post("/tickets/{ticket_id}/action")
     def ticket_action(

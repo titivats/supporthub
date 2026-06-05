@@ -6,6 +6,8 @@ from fastapi import HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from python.settings import BASE_URL
+
 from python.routes.sections import (
     register_admin_machines_routes,
     register_auth_user_routes,
@@ -528,6 +530,7 @@ def register_web_routes(app, templates, deps):
         "_ensure_master_machine_type": _ensure_master_machine_type,
         "_prune_line_machine_map": _prune_line_machine_map,
         "get_current_user": get_current_user,
+        "BASE_URL": BASE_URL,
     }
 
     register_auth_user_routes(app, templates, route_ctx)

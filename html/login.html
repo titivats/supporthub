@@ -42,14 +42,14 @@
   <div class="card">
     <div class="head">Login</div>
     <div class="body">
-      <form action="/login" method="post">
+      <form action="{{ base_url }}/login" method="post">
         <label>Username</label>
         <input name="username" placeholder="Username">
         <label>Password</label>
         <input name="password" type="password" placeholder="Password">
         <button class="btn primary" type="submit">Sign in</button>
       </form>
-      <a class="btn" href="/signup">Add User</a>
+      <a class="btn" href="{{ base_url }}/signup">Add User</a>
 
       {% if error %}<div class="err">{{ error }}</div>{% endif %}
       {% if created %}<div class="ok">สร้างผู้ใช้สำเร็จ กรุณาเข้าสู่ระบบ</div>{% endif %}
